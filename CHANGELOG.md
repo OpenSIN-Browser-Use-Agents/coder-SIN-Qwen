@@ -14,6 +14,7 @@
 - include repository URLs, relevant file URLs, and curated official reference URLs in repo-aware Qwen prompts
 - add persistent consult memory with `context_id`, `message_id`, and compact summaries for repo-aware sessions
 - upgrade consult memory to a canonical `state_snapshot` envelope with decision history and metadata
+- add a deterministic validator/critic pass that scores replies, flags violations, and strips fluff when appropriate
 
 ## 0.1.0
 

@@ -18,6 +18,7 @@
 - repo-aware prompts include repository/file URLs plus curated official reference URLs for the current stack
 - repo-aware consults persist `context_id`, `message_id`, and a compact previous summary in `.omo-sin-qwen-memory.json`
 - consult memory now uses a canonical `state_snapshot` envelope with metadata, mandate, decision history, constraints, and completion criteria
+- validator/critic review now checks constraints, completion criteria, and fluff before the final reply is returned
 - `preflight.js` — dependency and env checks
 - `secrets-check.js` — secret presence checks
 - `SECRETS.md` — Infisical and env checklist

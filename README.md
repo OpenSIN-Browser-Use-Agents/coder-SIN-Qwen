@@ -204,6 +204,7 @@ For repo-aware prompts, the relay now also includes:
 - curated official reference URLs for relevant technologies such as Node.js, Playwright, GitHub Actions, and Infisical when applicable
 - persistent consult metadata (`context_id`, `message_id`, previous summary)
 - a canonical `state_snapshot` envelope with protocol version, sender/receiver metadata, decision history, constraints, and completion criteria
+- a validator/critic review pass that scores replies, flags violations, and can strip fluff before returning text output
 
 Resolved milestones:
 

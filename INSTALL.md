@@ -73,6 +73,7 @@ After each completed turn it will also re-assert `Qwen3.6-Max-Preview` so the sa
 For repo-aware prompts, the relay includes GitHub URLs for the repo and relevant files plus curated official reference URLs for the detected stack.
 It also persists compact consult memory with `context_id`, `message_id`, and the previous summary in `.omo-sin-qwen-memory.json` by default.
 The persisted prompt state now follows a canonical `state_snapshot` envelope so future consults can resume from compact structured memory instead of raw chat history.
+Repo-aware replies now also pass through a deterministic validator/critic layer that can flag violations and strip obvious fluff before stdout is returned.
 
 The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and returns the raw Qwen reply by default.
 
