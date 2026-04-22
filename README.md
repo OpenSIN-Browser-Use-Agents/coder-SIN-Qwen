@@ -196,6 +196,12 @@ The wrapper has been verified end-to-end against Qwen in attach mode; it now sen
 
 Extra Qwen turns are now opt-in only. Use `--turns 2` or higher when you explicitly want a same-chat follow-up.
 
+For repo-aware prompts, the relay now also includes:
+- the repository web URL
+- commit URL
+- selected file URLs from the current repo state
+- curated official reference URLs for relevant technologies such as Node.js, Playwright, GitHub Actions, and Infisical when applicable
+
 Resolved milestones:
 
 - #1 Stabilize `ask-qwen` wrapper execution

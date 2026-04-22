@@ -70,6 +70,8 @@ If your global OpenCode config also contains those commands, both paths use the 
 The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
 After each completed turn it will also re-assert `Qwen3.6-Max-Preview` so the same chat does not visually drift back to Plus.
 
+For repo-aware prompts, the relay includes GitHub URLs for the repo and relevant files plus curated official reference URLs for the detected stack.
+
 The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and returns the raw Qwen reply by default.
 
 If you explicitly want an extra same-chat follow-up, opt in with:

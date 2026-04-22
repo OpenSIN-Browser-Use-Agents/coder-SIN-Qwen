@@ -11,6 +11,7 @@
 - keep extra Qwen turns opt-in only, continue them in the same chat, and wait for assistant text to stabilize before reading it
 - replace the local shell wrapper with repo-local OpenCode command templates in `.opencode/opencode.json`
 - re-assert `Qwen3.6-Max-Preview` after each completed turn so the chat does not drift back to Plus
+- include repository URLs, relevant file URLs, and curated official reference URLs in repo-aware Qwen prompts
 
 ## 0.1.0
 

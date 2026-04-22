@@ -47,6 +47,7 @@
 - The live browser flow now auto-selects `Qwen3.6-Max-Preview` before the first prompt.
 - After each completed turn the relay re-asserts `Qwen3.6-Max-Preview` to keep the active chat visually pinned to the intended model.
 - Extra Qwen turns are opt-in only via `--turns 2+` and now stay in the same chat.
+- Repo-aware prompts now include repository URLs, relevant file URLs, and curated official reference URLs for the detected stack.
 - The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.
 - Resolved milestones: `#1 Stabilize ask-qwen wrapper execution`, `#2 Support real multi-turn Qwen conversations`, `#3 Keep Max Preview pinned after each turn`.
 - The repo-local OpenCode config now defines `/ask-qwen`, `/ask-qwen-json`, and the `omo-SIN-Qwen` agent directly in `.opencode/opencode.json` so the shell wrapper is no longer required.
