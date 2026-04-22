@@ -1,6 +1,6 @@
-# omo-SIN-Qwen
+# coder-SIN-Qwen
 
-omo-SIN-Qwen is a **standalone relay proxy repo** for OpenCode-style execution.
+coder-SIN-Qwen is a **standalone relay proxy repo** for OpenCode-style execution.
 
 It does not “think” for you. It:
 
@@ -50,7 +50,7 @@ node ./index.js --json "Review the repo and propose the next implementation step
 Autotraining cycle:
 
 ```bash
-node ./cli-autotraining.js "Design the next omo-SIN-Qwen improvement"
+node ./cli-autotraining.js "Design the next coder-SIN-Qwen improvement"
 ```
 
 Optional snapshot before run:
@@ -177,17 +177,17 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 - `CHROME_PROFILE_DIRECTORY` — explicit Chrome profile name when `CHROME_PROFILE` points at the user-data root
 - `CHROME_CDP_URL` — attach to an already-running Chrome debug endpoint
 - `CHROME_REMOTE_DEBUGGING_PORT` — shorthand for a local CDP endpoint
-- `SIN_OMO_QWEN_DRY_RUN=1` — skip browser automation and print payload only
+- `SIN_CODER_QWEN_DRY_RUN=1` — skip browser automation and print payload only (legacy `SIN_OMO_QWEN_DRY_RUN` still works)
 - `--json` — print the parsed machine-readable payload instead of raw Qwen text
-- `SIN_OMO_QWEN_LOG_FILE` — JSONL log destination
-- `SIN_OMO_QWEN_ARTIFACT_DIR` — screenshot output directory
-- `SIN_OMO_QWEN_MEMORY_FILE` — persistent consult memory file (defaults to `.omo-sin-qwen-memory.json`)
-- `SIN_OMO_QWEN_AUTOTRAINING_FILE` — JSONL file for autotraining snapshots/suggestions
+- `SIN_CODER_QWEN_LOG_FILE` — JSONL log destination (legacy `SIN_OMO_QWEN_LOG_FILE` still works)
+- `SIN_CODER_QWEN_ARTIFACT_DIR` — screenshot output directory (legacy `SIN_OMO_QWEN_ARTIFACT_DIR` still works)
+- `SIN_CODER_QWEN_MEMORY_FILE` — persistent consult memory file (defaults to `.coder-sin-qwen-memory.json`; legacy var still works)
+- `SIN_CODER_QWEN_AUTOTRAINING_FILE` — JSONL file for autotraining snapshots/suggestions (legacy var still works)
 - `INFISICAL_ENV_NAME` — Infisical environment slug for sync commands
 - `INFISICAL_SECRET_PATH` — Infisical folder path for sync commands
 - `INFISICAL_PROJECT_ID` — Infisical project id for non-interactive pull/push flows
-- `SIN_OMO_QWEN_SMOKE_LIVE=1` — run a real browser smoke proof
-- `SIN_OMO_QWEN_REQUIRE_PROFILE=1` — force preflight to fail when the Chrome profile is missing
+- `SIN_CODER_QWEN_SMOKE_LIVE=1` — run a real browser smoke proof (legacy `SIN_OMO_QWEN_SMOKE_LIVE` still works)
+- `SIN_CODER_QWEN_REQUIRE_PROFILE=1` — force preflight to fail when the Chrome profile is missing (legacy `SIN_OMO_QWEN_REQUIRE_PROFILE` still works)
 - `.qwenignore` — preferred token-saving context filter
 - `--snapshot` — create a Git snapshot before the Qwen run
 
@@ -198,7 +198,7 @@ See `INSTALL.md` for the full setup.
 
 The global OpenCode config can also expose `/ask-qwen` and `/ask-qwen-json` command templates that call `node ./index.js` directly. The repo-local config now follows that same direct-CLI path instead of relying on a shell wrapper.
 
-OpenCode can also expose `omo-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
+OpenCode can also expose `coder-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
 
 The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
 It also re-asserts `Qwen3.6-Max-Preview` after each completed turn so the active chat stays pinned to the intended model.
@@ -249,7 +249,7 @@ node ./index.js --turns 1 "your prompt"
 
 ## Artifacts
 
-Live smoke checks and browser failures can write screenshots to `artifacts/` (or `SIN_OMO_QWEN_ARTIFACT_DIR`).
+Live smoke checks and browser failures can write screenshots to `artifacts/` (or `SIN_CODER_QWEN_ARTIFACT_DIR`, with legacy alias support).
 
 ## Secrets
 

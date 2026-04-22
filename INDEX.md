@@ -1,8 +1,8 @@
-# omo-SIN-Qwen Index
+# coder-SIN-Qwen Index
 
 ## What this repo is
 
-`omo-SIN-Qwen` is a standalone OpenCode agent repo that relays tasks to Qwen through the local Chrome `Default` profile.
+`coder-SIN-Qwen` is a standalone OpenCode agent repo that relays tasks to Qwen through the local Chrome `Default` profile.
 
 ## Main files
 
@@ -16,7 +16,7 @@
 - live chat auto-selects `Qwen3.6-Max-Preview` before sending the prompt
 - extra turns happen only when `--turns 2+` is requested, and they continue in the same chat
 - repo-aware prompts include repository/file URLs plus curated official reference URLs for the current stack
-- repo-aware consults persist `context_id`, `message_id`, and a compact previous summary in `.omo-sin-qwen-memory.json`
+- repo-aware consults persist `context_id`, `message_id`, and a compact previous summary in `.coder-sin-qwen-memory.json`
 - consult memory now uses a canonical `state_snapshot` envelope with metadata, mandate, decision history, constraints, and completion criteria
 - validator/critic review now checks constraints, completion criteria, and fluff before the final reply is returned
 - `preflight.js` — dependency and env checks
@@ -51,4 +51,4 @@
 
 ## OpenCode
 
-Use the repo-local `./.opencode/opencode.json` config for `/ask-qwen`, `/ask-qwen-json`, and the `omo-SIN-Qwen` agent entry.
+Use the repo-local `./.opencode/opencode.json` config for `/ask-qwen`, `/ask-qwen-json`, and the `coder-SIN-Qwen` agent entry.

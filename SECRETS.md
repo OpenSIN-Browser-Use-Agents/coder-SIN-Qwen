@@ -10,8 +10,8 @@
 - `CHROME_CDP_URL`
 - `CHROME_REMOTE_DEBUGGING_PORT`
 - `QWEN_URL`
-- `SIN_OMO_QWEN_LOG_FILE`
-- `SIN_OMO_QWEN_ARTIFACT_DIR`
+- `SIN_CODER_QWEN_LOG_FILE` (legacy `SIN_OMO_QWEN_LOG_FILE` still works)
+- `SIN_CODER_QWEN_ARTIFACT_DIR` (legacy `SIN_OMO_QWEN_ARTIFACT_DIR` still works)
 - `INFISICAL_ENV_NAME`
 - `INFISICAL_SECRET_PATH`
 - `INFISICAL_PROJECT_ID`
@@ -41,7 +41,7 @@ If the active Infisical project is already correct:
 
 ```bash
 export INFISICAL_PROJECT_ID="fa7758b4-f84c-4297-966e-710056d531ef"
-export INFISICAL_SECRET_PATH="/opensin/omo-sin-qwen"
+export INFISICAL_SECRET_PATH="/opensin/coder-sin-qwen"
 npm run secrets:push
 ```
 

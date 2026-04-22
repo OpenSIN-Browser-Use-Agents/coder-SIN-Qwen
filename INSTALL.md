@@ -62,7 +62,7 @@ Then run:
 /ask-qwen build a feature
 ```
 
-If your OpenCode global config contains the `omo-SIN-Qwen` agent entry, you can also select `omo-SIN-Qwen` directly from the agent picker for Qwen-first execution.
+If your OpenCode global config contains the `coder-SIN-Qwen` agent entry, you can also select `coder-SIN-Qwen` directly from the agent picker for Qwen-first execution.
 
 The repo-local `/ask-qwen` and `/ask-qwen-json` entries call `node ./index.js` directly.
 If your global OpenCode config also contains those commands, both paths use the same direct CLI strategy.
@@ -71,7 +71,7 @@ The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending promp
 After each completed turn it will also re-assert `Qwen3.6-Max-Preview` so the same chat does not visually drift back to Plus.
 
 For repo-aware prompts, the relay includes GitHub URLs for the repo and relevant files plus curated official reference URLs for the detected stack.
-It also persists compact consult memory with `context_id`, `message_id`, and the previous summary in `.omo-sin-qwen-memory.json` by default.
+It also persists compact consult memory with `context_id`, `message_id`, and the previous summary in `.coder-sin-qwen-memory.json` by default.
 The persisted prompt state now follows a canonical `state_snapshot` envelope so future consults can resume from compact structured memory instead of raw chat history.
 Repo-aware replies now also pass through a deterministic validator/critic layer that can flag violations and strip obvious fluff before stdout is returned.
 
@@ -86,7 +86,7 @@ node ./index.js --turns 2 "build a feature"
 Autotraining helper:
 
 ```bash
-node ./cli-autotraining.js "Design the next omo-SIN-Qwen improvement"
+node ./cli-autotraining.js "Design the next coder-SIN-Qwen improvement"
 ```
 
 Use `--json` if you want the full snapshot + suggestion output.
@@ -122,20 +122,20 @@ If the target Infisical project is already correct and you want to publish curre
 
 ```bash
 export INFISICAL_PROJECT_ID="fa7758b4-f84c-4297-966e-710056d531ef"
-export INFISICAL_SECRET_PATH="/opensin/omo-sin-qwen"
+export INFISICAL_SECRET_PATH="/opensin/coder-sin-qwen"
 npm run secrets:push
 ```
 
 Current Infisical target for this repo:
 
 - project id: `fa7758b4-f84c-4297-966e-710056d531ef`
-- secret path: `/opensin/omo-sin-qwen`
+- secret path: `/opensin/coder-sin-qwen`
 
 ## 7. Logging
 
-To capture JSONL logs, set `SIN_OMO_QWEN_LOG_FILE=/path/to/omo-sin-qwen.log`.
+To capture JSONL logs, set `SIN_CODER_QWEN_LOG_FILE=/path/to/coder-sin-qwen.log`.
 
-To force profile validation in preflight, set `SIN_OMO_QWEN_REQUIRE_PROFILE=1`.
+To force profile validation in preflight, set `SIN_CODER_QWEN_REQUIRE_PROFILE=1`.
 
 ## 8. Restore
 

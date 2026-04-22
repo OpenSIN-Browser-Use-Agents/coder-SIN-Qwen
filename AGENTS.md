@@ -1,8 +1,8 @@
-# AGENTS.md — omo-SIN-Qwen
+# AGENTS.md — coder-SIN-Qwen
 
 ## Purpose
 
-`omo-SIN-Qwen` is a standalone OpenCode agent repo that relays work to Qwen through the local Chrome `Default` profile.
+`coder-SIN-Qwen` is a standalone OpenCode agent repo that relays work to Qwen through the local Chrome `Default` profile.
 
 ## Rules
 

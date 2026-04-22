@@ -14,9 +14,9 @@
 
 ## Logging
 
-Set `SIN_OMO_QWEN_LOG_FILE` to capture JSONL run logs.
+Set `SIN_CODER_QWEN_LOG_FILE` to capture JSONL run logs.
 
-Use `SIN_OMO_QWEN_ARTIFACT_DIR` to change where screenshots are stored.
+Use `SIN_CODER_QWEN_ARTIFACT_DIR` to change where screenshots are stored.
 
 ## Secrets
 
@@ -27,9 +27,9 @@ If your organization uses Infisical, mirror only the needed fields there one by 
 - `CHROME_CDP_URL`
 - `CHROME_REMOTE_DEBUGGING_PORT`
 - `QWEN_URL`
-- `SIN_OMO_QWEN_LOG_FILE`
-- `SIN_OMO_QWEN_ARTIFACT_DIR`
-- `SIN_OMO_QWEN_REQUIRE_PROFILE`
+- `SIN_CODER_QWEN_LOG_FILE`
+- `SIN_CODER_QWEN_ARTIFACT_DIR`
+- `SIN_CODER_QWEN_REQUIRE_PROFILE`
 - `GH_TOKEN`
 
 Never commit browser cookies or token files.
@@ -52,7 +52,7 @@ Run `npm run secrets:push` only when you are sure the current Infisical project 
 ## Browser verification
 
 - Use `npm run smoke` for local readiness.
-- Set `SIN_OMO_QWEN_SMOKE_LIVE=1` for a live page check.
+- Set `SIN_CODER_QWEN_SMOKE_LIVE=1` for a live page check.
 - Screenshots are stored in `artifacts/` by default.
 - Live checks require the Chrome `Default` profile to be unused by other Chrome windows.
 - CDP attach mode avoids that requirement when an existing Chrome debug endpoint is available.
