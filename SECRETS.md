@@ -40,7 +40,8 @@ node ./secrets-check.js
 If the active Infisical project is already correct:
 
 ```bash
-export INFISICAL_PROJECT_ID="your-project-id"
+export INFISICAL_PROJECT_ID="fa7758b4-f84c-4297-966e-710056d531ef"
+export INFISICAL_SECRET_PATH="/opensin/omo-sin-qwen"
 npm run secrets:push
 ```
 

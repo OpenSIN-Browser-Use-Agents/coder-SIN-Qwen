@@ -83,11 +83,15 @@ npm run secrets:check
 If the target Infisical project is already correct and you want to publish current values:
 
 ```bash
-export INFISICAL_PROJECT_ID="your-project-id"
+export INFISICAL_PROJECT_ID="fa7758b4-f84c-4297-966e-710056d531ef"
+export INFISICAL_SECRET_PATH="/opensin/omo-sin-qwen"
 npm run secrets:push
 ```
 
-Current project id for this repo: `fb8d94c8-1306-4038-893c-c619a624bb05`
+Current Infisical target for this repo:
+
+- project id: `fa7758b4-f84c-4297-966e-710056d531ef`
+- secret path: `/opensin/omo-sin-qwen`
 
 ## 7. Logging
 
