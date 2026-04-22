@@ -162,6 +162,9 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 - `SIN_OMO_QWEN_DRY_RUN=1` — skip browser automation and print payload only
 - `SIN_OMO_QWEN_LOG_FILE` — JSONL log destination
 - `SIN_OMO_QWEN_ARTIFACT_DIR` — screenshot output directory
+- `INFISICAL_ENV_NAME` — Infisical environment slug for sync commands
+- `INFISICAL_SECRET_PATH` — Infisical folder path for sync commands
+- `INFISICAL_PROJECT_ID` — Infisical project id for non-interactive pull/push flows
 - `SIN_OMO_QWEN_SMOKE_LIVE=1` — run a real browser smoke proof
 - `SIN_OMO_QWEN_REQUIRE_PROFILE=1` — force preflight to fail when the Chrome profile is missing
 - `.qwenignore` — preferred token-saving context filter

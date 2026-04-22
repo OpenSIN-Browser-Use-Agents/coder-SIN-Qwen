@@ -87,6 +87,8 @@ export INFISICAL_PROJECT_ID="your-project-id"
 npm run secrets:push
 ```
 
+Current project id for this repo: `fb8d94c8-1306-4038-893c-c619a624bb05`
+
 ## 7. Logging
 
 To capture JSONL logs, set `SIN_OMO_QWEN_LOG_FILE=/path/to/omo-sin-qwen.log`.
