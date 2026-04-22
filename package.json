@@ -1,0 +1,40 @@
+{
+  "name": "omo-sin-qwen",
+  "version": "0.1.0",
+  "description": "omo-SIN-Qwen: an oh-my-opencode relay proxy for Qwen-driven execution.",
+  "type": "module",
+  "bin": {
+    "ask-qwen": "./index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ignore": "^7.0.5",
+    "playwright": "^1.59.1"
+  },
+  "scripts": {
+    "start": "node ./index.js",
+    "ask": "node ./index.js",
+    "preflight": "node ./preflight.js",
+    "test": "node --test test/*.test.js",
+    "build": "node ./scripts/build.mjs",
+    "check": "node --test test/*.test.js && node ./scripts/build.mjs",
+    "smoke": "node ./smoke.js",
+    "smoke:live": "node ./smoke.js --live",
+    "cdp:start": "bash ./scripts/start-cdp-sidecar.sh",
+    "cdp:status": "bash ./scripts/cdp-status.sh",
+    "secrets:pull": "bash ./scripts/sync-secrets.sh",
+    "secrets:check": "node ./secrets-check.js",
+    "secrets:push": "node ./push-secrets.js --apply",
+    "live:prepare": "bash ./scripts/prepare-live-run.sh",
+    "restore:last": "node ./restore.js --last",
+    "remote:init": "bash ./scripts/bootstrap-remote.sh",
+    "merge:main": "bash ./scripts/merge-main.sh",
+    "verify": "node ./verify.js",
+    "postwrite": "node ./verify.js",
+    "release:patch": "npm version patch --no-git-tag-version",
+    "release:minor": "npm version minor --no-git-tag-version",
+    "release:major": "npm version major --no-git-tag-version"
+  }
+}
