@@ -14,8 +14,8 @@ export const SELECTORS = {
   assistantOutput: ['.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.message-content', '.chat-message .content']
 };
 
-export async function runQwenSession(input, maxTurns = 5) {
-  // The live run always uses the real local Chrome Default profile.
+export async function runQwenSession(input) {
+  // The browser relay itself stays single-turn; higher-level orchestration can chain multiple fresh consults.
   const connectionConfig = resolveChromeConnectionConfig();
   ensureProfileExists(connectionConfig.profilePath);
   const session = await openChromeSession(connectionConfig, {
@@ -38,47 +38,23 @@ export async function runQwenSession(input, maxTurns = 5) {
     await maybeStartNewChat(page);
     await maybeSelectModel(page);
 
-    // The first prompt contains full repo context; follow-ups focus on forcing completion.
-    let currentPrompt = buildSessionPrompt(input);
-    let finalResponse = '';
-
-    for (let turn = 1; turn <= maxTurns; turn += 1) {
-      const inputBox = await findPromptInput(page);
-      if (!inputBox) {
-        throw new Error('Qwen prompt input not found in the Chrome Default profile session.');
-      }
-
-      const previousAssistantState = await getLastAssistantState(page);
-      await enterPrompt(inputBox, currentPrompt);
-      await submitPrompt(page, inputBox, currentPrompt);
-      await waitForStreamingDone(page, previousAssistantState);
-
-      const responseText = await getLastAssistantText(page);
-      if (!responseText) {
-        throw new Error('No assistant response could be extracted from the Qwen UI.');
-      }
-
-      finalResponse = responseText;
-      const status = extractStatus(responseText);
-
-      // If Qwen gives a normal answer without draft/final metadata, only continue when it looks like
-      // there is still a useful next step to ask about.
-      if (!status) {
-        if (turn < maxTurns && shouldContinueConversation(responseText)) {
-          currentPrompt = buildConversationFollowUpPrompt(responseText);
-          continue;
-        }
-
-        break;
-      }
-      if (status === 'final') break;
-
-      currentPrompt = status === 'draft'
-        ? 'Refine the previous answer to production-ready quality. Return complete files only and end with {"status":"final"}.'
-        : 'Continue, complete the implementation, and end with {"status":"final"}.';
+    const prompt = buildSessionPrompt(input);
+    const inputBox = await findPromptInput(page);
+    if (!inputBox) {
+      throw new Error('Qwen prompt input not found in the Chrome Default profile session.');
     }
 
-    return finalResponse;
+    const previousAssistantState = await getLastAssistantState(page);
+    await enterPrompt(inputBox, prompt);
+    await submitPrompt(page, inputBox, prompt);
+    await waitForStreamingDone(page, previousAssistantState);
+
+    const responseText = await getLastAssistantText(page);
+    if (!responseText) {
+      throw new Error('No assistant response could be extracted from the Qwen UI.');
+    }
+
+    return responseText;
   } catch (error) {
     if (page) {
       const screenshotPath = await captureScreenshot(page, 'run-failed').catch(() => '');
@@ -168,7 +144,7 @@ export async function runBrowserE2ECheck() {
 }
 
 export async function sendToQwen(input) {
-  return runQwenSession(input, 1);
+  return runQwenSession(input);
 }
 
 export function buildPromptPayload(context) {
@@ -521,6 +497,10 @@ async function waitForStreamingDone(page, previousAssistantState = { count: 0, t
 
     return !hasStopButton && !busyNode;
   }, { timeout: 300_000, polling: 1_000 }).catch(() => {});
+
+  // Qwen sometimes keeps appending text for a moment after the visible loading affordance disappears.
+  // Wait until the newest assistant message stops changing before we read it or start any follow-up work.
+  await waitForAssistantTextToStabilize(page, previousAssistantState.text);
   await page.waitForTimeout(1_500);
 }
 
@@ -548,6 +528,31 @@ async function getLastAssistantState(page) {
   }
 
   return { count: 0, text: '' };
+}
+
+async function waitForAssistantTextToStabilize(page, previousText = '') {
+  let stableRounds = 0;
+  let lastSeen = previousText;
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const current = await getLastAssistantText(page).catch(() => '');
+    if (!current || current === previousText) {
+      stableRounds = 0;
+      lastSeen = current || lastSeen;
+      await page.waitForTimeout(750);
+      continue;
+    }
+
+    if (current === lastSeen) {
+      stableRounds += 1;
+      if (stableRounds >= 2) return;
+    } else {
+      stableRounds = 0;
+      lastSeen = current;
+    }
+
+    await page.waitForTimeout(750);
+  }
 }
 
 async function readInputValue(input) {
@@ -601,7 +606,7 @@ async function writeArtifactJson(name, payload) {
   return filePath;
 }
 
-function shouldContinueConversation(text) {
+export function shouldContinueConversation(text) {
   const normalized = String(text || '').trim();
   if (!normalized) return false;
 
@@ -612,10 +617,16 @@ function shouldContinueConversation(text) {
   return false;
 }
 
-function buildConversationFollowUpPrompt(previousResponse) {
+export function buildConversationFollowUpPrompt(originalRequest, previousResponse) {
+  const trimmed = String(previousResponse || '').trim().slice(0, 2000);
   return [
-    'Continue the same conversation.',
-    'Based on your previous answer, give only the single most important next step.',
-    'Ignore optional extras and keep it short and concrete.'
+    `Original request:\n${originalRequest}`,
+    '',
+    'Refine your previous answer using one fresh follow-up turn.',
+    'Keep only the necessary, best-practice-aligned next step or recommendation.',
+    'Remove optional extras, duplicate explanation, and low-value suggestions.',
+    '',
+    'Previous answer:',
+    trimmed
   ].join('\n');
 }

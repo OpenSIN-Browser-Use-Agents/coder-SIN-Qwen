@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Main CLI entrypoint for the standalone Qwen relay agent.
 import { buildContext } from './context.js';
-import { runQwenSession } from './browser.js';
+import { buildConversationFollowUpPrompt, runQwenSession, shouldContinueConversation } from './browser.js';
 import { parseQwenResponse } from './parser.js';
 import { createSnapshot } from './git.js';
 import { runSmokeCheck } from './smoke.js';
@@ -76,11 +76,7 @@ async function main() {
     return;
   }
 
-  const reply = await withTimeout(
-    runQwenSession(context, maxTurns),
-    sessionTimeoutMs,
-    `Qwen session timed out after ${sessionTimeoutMs}ms`
-  );
+  const reply = await runControlledConversation(context, input, maxTurns, sessionTimeoutMs);
   const parsed = parseQwenResponse(reply);
 
   if (jsonFlag) {
@@ -119,4 +115,27 @@ function writeStdout(text) {
       else resolve();
     });
   });
+}
+
+async function runControlledConversation(initialContext, originalPrompt, maxTurns, sessionTimeoutMs) {
+  // Keep each browser consult single-turn and deterministic; multi-turn behavior is built by chaining
+  // fresh chats instead of relying on a brittle in-page conversation loop.
+  let currentInput = initialContext;
+  let reply = '';
+
+  for (let turn = 1; turn <= maxTurns; turn += 1) {
+    reply = await withTimeout(
+      runQwenSession(currentInput),
+      sessionTimeoutMs,
+      `Qwen session timed out after ${sessionTimeoutMs}ms`
+    );
+
+    if (turn >= maxTurns) break;
+    if (typeof initialContext === 'string') break;
+    if (!shouldContinueConversation(reply)) break;
+
+    currentInput = buildConversationFollowUpPrompt(originalPrompt, reply);
+  }
+
+  return reply;
 }
