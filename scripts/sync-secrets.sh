@@ -12,7 +12,7 @@ if ! command -v infisical >/dev/null 2>&1; then
   exit 1
 fi
 
-args=(export --env="$INFISICAL_ENV_NAME" --path="$INFISICAL_SECRET_PATH" --format=dotenv-export --output-file=.env.local)
+args=(export --env="$INFISICAL_ENV_NAME" --path="$INFISICAL_SECRET_PATH" --format=dotenv --output-file=.env.local)
 
 if [[ -n "$INFISICAL_PROJECT_ID" ]]; then
   args+=(--projectId "$INFISICAL_PROJECT_ID")

@@ -4,6 +4,7 @@ dist
 coverage
 .env
 .env.*
+!.env.example
 *.log
 artifacts/
 .env.local
