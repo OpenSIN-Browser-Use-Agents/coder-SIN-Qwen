@@ -191,6 +191,11 @@ The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
 
 The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, can take one useful follow-up turn when needed, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
 
+Current tracked follow-ups:
+
+- #1 Stabilize `ask-qwen` wrapper execution
+- #2 Support real multi-turn Qwen conversations
+
 ## Handoff
 
 See `HANDOFF.md` for the compact operating notes for future agents.
@@ -207,6 +212,12 @@ See `CHANGELOG.md` for the initial release notes.
 
 See `OPS.md` for smoke tests, logging, secrets handling, and rollback.
 See `LIVE_RUNBOOK.md` and `MERGE_RUNBOOK.md` for operational execution sequences.
+
+If the OpenCode wrapper still misbehaves in your local shell, use the direct fallback temporarily:
+
+```bash
+node ./index.js --turns 1 "your prompt"
+```
 
 ## Artifacts
 

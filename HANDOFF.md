@@ -46,3 +46,4 @@
 - Raw Qwen text is now the default CLI output; use `--json` only when machine-readable parsing is needed.
 - The live browser flow now auto-selects `Qwen3.6-Max-Preview` before the first prompt and can ask one short follow-up when Qwen gives a useful suggestion.
 - The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.
+- Open tracking issues: `#1 Stabilize ask-qwen wrapper execution`, `#2 Support real multi-turn Qwen conversations`.
