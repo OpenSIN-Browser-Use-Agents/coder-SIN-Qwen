@@ -30,8 +30,9 @@ test('hydrates repo context with state snapshot and ids', async () => {
 
   assert.equal(typeof result.consultMeta.contextId, 'string');
   assert.equal(typeof result.consultMeta.messageId, 'string');
-  assert.equal(result.context.stateSnapshot.repoUrl, 'https://github.com/example/repo');
-  assert.equal(result.context.stateSnapshot.relevantFiles[0].path, 'index.js');
+  assert.equal(result.context.stateSnapshot.metadata.contextId, result.consultMeta.contextId);
+  assert.equal(result.context.stateSnapshot.stateSnapshot.repositoryUrl, 'https://github.com/example/repo');
+  assert.equal(result.context.stateSnapshot.stateSnapshot.affectedFiles[0].path, 'index.js');
 
   delete process.env.SIN_OMO_QWEN_MEMORY_FILE;
   await fs.rm(tempDir, { recursive: true, force: true });
@@ -73,6 +74,8 @@ test('persists and reuses consult memory context id', async () => {
   const second = await hydrateConsultContext(baseContext, 'Review the repo again');
   assert.equal(second.consultMeta.contextId, first.consultMeta.contextId);
   assert.equal(second.context.previousSummary, 'Run verify first.');
+  assert.equal(second.context.stateSnapshot.decisionHistory.length, 1);
+  assert.equal(second.context.stateSnapshot.decisionHistory[0].summary, 'Run verify first.');
 
   delete process.env.SIN_OMO_QWEN_MEMORY_FILE;
   await fs.rm(tempDir, { recursive: true, force: true });

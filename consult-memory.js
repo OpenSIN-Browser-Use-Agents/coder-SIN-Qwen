@@ -25,7 +25,8 @@ export async function hydrateConsultContext(baseContext, prompt) {
     contextId,
     messageId,
     previousMessageId: previousEntry?.lastMessageId || '',
-    previousSummary: previousEntry?.latestSummary || ''
+    previousSummary: previousEntry?.latestSummary || '',
+    decisionHistory: previousEntry?.decisionHistory || []
   });
 
   return {
@@ -49,6 +50,8 @@ export async function persistConsultMemory({ consultMeta, context, prompt, reply
 
   const memory = await readMemoryFile(consultMeta.memoryFile);
   const summary = buildSummary(reply, parsed);
+  const previousEntry = memory.contexts?.[consultMeta.contextId] || {};
+  const decisionEntry = buildDecisionEntry({ prompt, summary, parsed });
   const contextEntry = {
     repoKey: consultMeta.repoKey,
     repoUrl: context.repo?.urls?.web || '',
@@ -61,12 +64,17 @@ export async function persistConsultMemory({ consultMeta, context, prompt, reply
     latestPrompt: prompt,
     latestSummary: summary,
     latestStatus: parsed?.payload?.status || '',
+    latestDecision: decisionEntry,
     constraints: context.constraints || [],
     completionCriteria: context.completionCriteria || [],
     references: (context.references || []).slice(0, 6),
     fileReferences: (context.fileReferences || []).slice(0, 8),
+    decisionHistory: trimDecisionHistory([
+      ...(previousEntry.decisionHistory || []),
+      decisionEntry
+    ]),
     history: trimHistory([
-      ...(memory.contexts?.[consultMeta.contextId]?.history || []),
+      ...(previousEntry.history || []),
       {
         messageId: consultMeta.messageId,
         timestamp: new Date().toISOString(),
@@ -94,18 +102,28 @@ export function resolveMemoryFile() {
 
 export function buildStateSnapshot(context, meta) {
   return {
-    contextId: meta.contextId,
+    protocolVersion: 'A2A-v2.1-lite',
     messageId: meta.messageId,
-    previousMessageId: meta.previousMessageId || '',
-    repoUrl: context.repo?.urls?.web || '',
-    commitUrl: context.repo?.urls?.commit || '',
-    treeUrl: context.repo?.urls?.tree || '',
-    branch: context.repo?.branch || 'N/A',
-    head: context.repo?.head || 'N/A',
-    dirty: Boolean(context.repo?.dirty),
+    metadata: {
+      sender: 'omo-SIN-Qwen',
+      receiver: 'Qwen',
+      timestamp: new Date().toISOString(),
+      contextId: meta.contextId,
+      previousMessageId: meta.previousMessageId || ''
+    },
+    mandate: String(context.prompt || ''),
+    stateSnapshot: {
+      repositoryUrl: context.repo?.urls?.web || '',
+      commitUrl: context.repo?.urls?.commit || '',
+      treeUrl: context.repo?.urls?.tree || '',
+      branch: context.repo?.branch || 'N/A',
+      head: context.repo?.head || 'N/A',
+      dirty: Boolean(context.repo?.dirty),
+      affectedFiles: (context.fileReferences || []).slice(0, 8),
+      references: (context.references || []).slice(0, 6)
+    },
+    decisionHistory: (meta.decisionHistory || []).slice(-3),
     previousSummary: meta.previousSummary || '',
-    relevantFiles: (context.fileReferences || []).slice(0, 8),
-    references: (context.references || []).slice(0, 6),
     constraints: context.constraints || [],
     completionCriteria: context.completionCriteria || []
   };
@@ -138,5 +156,18 @@ function buildSummary(reply, parsed) {
 }
 
 function trimHistory(history) {
+  return history.slice(-5);
+}
+
+function buildDecisionEntry({ prompt, summary, parsed }) {
+  return {
+    timestamp: new Date().toISOString(),
+    status: parsed?.payload?.status || parsed?.plan || '',
+    prompt,
+    summary
+  };
+}
+
+function trimDecisionHistory(history) {
   return history.slice(-5);
 }
