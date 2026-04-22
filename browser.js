@@ -62,6 +62,10 @@ export async function runQwenSession(input, options = {}) {
         throw new Error('No assistant response could be extracted from the Qwen UI.');
       }
 
+      // Qwen can visually drift back to Plus after a send; re-assert Max Preview after each completed turn
+      // so the active chat stays pinned to the intended model for both the next turn and the final UI state.
+      await ensureMaxPreviewSelected(page);
+
       if (turn >= maxTurns) break;
       if (!shouldContinueConversation(responseText)) break;
 
