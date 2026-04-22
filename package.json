@@ -17,6 +17,8 @@
     "start": "node ./index.js",
     "ask": "node ./index.js",
     "ask:json": "node ./index.js --json",
+    "autotraining": "node ./cli-autotraining.js",
+    "autotraining:json": "node ./cli-autotraining.js --json",
     "preflight": "node ./preflight.js",
     "test": "node --test test/*.test.js",
     "build": "node ./scripts/build.mjs",
