@@ -12,4 +12,6 @@ test('Qwen selector map stays populated', () => {
       assert.ok(selector.trim().length > 0);
     }
   }
+
+  assert.ok(SELECTORS.modelMenu.some((selector) => selector.includes('ant-dropdown-trigger')), 'model menu should include the visible Qwen dropdown trigger');
 });

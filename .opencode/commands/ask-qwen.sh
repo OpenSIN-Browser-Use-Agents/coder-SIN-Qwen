@@ -16,4 +16,5 @@ if [[ -z "$PROMPT" ]]; then
 fi
 
 # Delegate to the repo-local CLI so behavior stays consistent everywhere.
-node "$ROOT_DIR/index.js" "$PROMPT"
+# Force a single conversational turn for normal chat usage.
+exec node "$ROOT_DIR/index.js" --turns 1 "$PROMPT"
