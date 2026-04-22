@@ -4,6 +4,10 @@ import { loadIgnorePatterns, filterPaths } from './ignore-filter.js';
 
 export async function buildContext({ prompt }) {
   // Gather only the metadata Qwen needs so prompts stay smaller and easier to reason about.
+  if (!shouldAttachRepoContext(prompt)) {
+    return prompt;
+  }
+
   const cwd = process.cwd();
   const [gitRemote, pkg, files] = await Promise.all([
     readGitRemote(cwd),
@@ -12,7 +16,7 @@ export async function buildContext({ prompt }) {
   ]);
 
   const ig = loadIgnorePatterns(cwd);
-  const filteredFiles = filterPaths(files, ig).slice(0, 200);
+  const filteredFiles = filterPaths(files, ig).slice(0, 60);
   const gitMeta = await readGitMeta(cwd);
 
   return {
@@ -30,6 +34,14 @@ export async function buildContext({ prompt }) {
       'Prefer complete files over partial snippets.'
     ]
   };
+}
+
+function shouldAttachRepoContext(prompt) {
+  // Simple chat turns work better when Qwen receives the user's message directly instead of a repo dump.
+  const text = String(prompt || '').trim();
+  if (!text) return false;
+  const repoKeywords = /(repo|repository|project|code|file|files|bug|fix|implement|implementation|refactor|test|build|package|dependency|dependencies|branch|commit|docs|documentation|agent|opencode|qwen)/iu;
+  return repoKeywords.test(text);
 }
 
 async function readGitRemote(cwd) {

@@ -8,7 +8,7 @@ const QWEN_URL = 'https://chat.qwen.ai';
 // Centralized selector map so UI changes stay localized.
 export const SELECTORS = {
   newChat: ['button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', '[data-testid="new-chat"]'],
-  modelMenu: ['button:has-text("Model")', 'button:has-text("Modell")', '[data-testid="model-selector"]'],
+  modelMenu: ['header span.ant-dropdown-trigger', 'header .index-module__model-selector-text___XvWe0', 'span.ant-dropdown-trigger', 'button:has-text("Model")', 'button:has-text("Modell")', '[data-testid="model-selector"]'],
   promptInput: ['textarea', '[contenteditable="true"]', 'input[type="text"]', 'textarea[aria-label*="message" i]', 'input[aria-label*="prompt" i]'],
   sendButton: ['.send-button', 'button[type="submit"]', 'button[aria-label*="send" i]', 'button:has-text("Send")', 'button:has-text("Senden")'],
   assistantOutput: ['.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.message-content', '.chat-message .content']
@@ -49,7 +49,7 @@ export async function runQwenSession(input, maxTurns = 5) {
       }
 
       await enterPrompt(inputBox, currentPrompt);
-      await submitPrompt(page);
+      await submitPrompt(page, inputBox, currentPrompt);
       await waitForStreamingDone(page);
 
       const responseText = await getLastAssistantText(page);
@@ -59,6 +59,10 @@ export async function runQwenSession(input, maxTurns = 5) {
 
       finalResponse = responseText;
       const status = extractStatus(responseText);
+
+      // Default behavior is conversational: if Qwen gives a normal answer without draft/final metadata,
+      // stop after the current turn instead of nagging it with synthetic follow-up prompts.
+      if (!status) break;
       if (status === 'final') break;
 
       currentPrompt = status === 'draft'
@@ -401,11 +405,15 @@ async function maybeSelectModel(page) {
       result.selector = selector;
       await button.click().catch(() => {});
       await page.waitForTimeout(500);
-      // Keep the model selection conservative to avoid breaking on small UI label changes.
-      const target = page.locator('text=Qwen 3.6 Max Preview, text=Qwen3.6-Max-Preview').first();
+      // Pick the Max Preview entry explicitly so the relay uses the stronger model by default.
+      const target = page.locator('div.index-module__model-item___MkLlj').filter({ hasText: 'Qwen3.6-Max-Preview' }).first();
       if (await target.count().catch(() => 0)) {
         result.modelFound = true;
-        await target.click().then(() => { result.modelClicked = true; }).catch(() => {});
+        await target.click({ force: true }).then(() => { result.modelClicked = true; }).catch(() => {});
+        await page.waitForFunction(() => {
+          const header = document.querySelector('.index-module__model-selector-text___XvWe0');
+          return Boolean(header && header.textContent && header.textContent.includes('Qwen3.6-Max-Preview'));
+        }, { timeout: 10_000 }).catch(() => {});
       }
       return result;
     }
@@ -439,15 +447,35 @@ async function enterPrompt(input, prompt) {
   await input.type(prompt, { delay: 4 });
 }
 
-async function submitPrompt(page) {
-  // Prefer explicit send buttons, then fall back to Enter for UIs without buttons.
-  const sendButtons = page.locator(SELECTORS.sendButton.join(', '));
-  if (await sendButtons.count().catch(() => 0)) {
-    await sendButtons.first().click();
+async function submitPrompt(page, input, prompt) {
+  // Press Enter first because the current Qwen UI sends naturally from the focused text box.
+  await page.waitForTimeout(150);
+  await input.focus().catch(() => {});
+
+  const isTextField = await input.evaluate((node) => {
+    const tag = node.tagName.toLowerCase();
+    return tag === 'textarea' || tag === 'input';
+  }).catch(() => false);
+
+  if (isTextField) {
+    await input.press('Enter').catch(() => {});
+  } else {
+    await page.keyboard.press('Enter').catch(() => {});
+  }
+
+  await page.waitForTimeout(700);
+
+  const currentValue = await readInputValue(input);
+  if (!currentValue || currentValue.trim().length === 0 || currentValue.trim() !== String(prompt || '').trim()) {
     return;
   }
 
-  await page.keyboard.press('Enter');
+  // Fallback to the explicit send button if Enter did not submit.
+  const sendButtons = page.locator('button.send-button');
+  if (await sendButtons.count().catch(() => 0)) {
+    await sendButtons.first().click({ force: true }).catch(() => {});
+    await page.waitForTimeout(500);
+  }
 }
 
 async function waitForStreamingDone(page) {
@@ -482,6 +510,18 @@ async function getLastAssistantText(page) {
   }
 
   return page.locator('body').innerText().catch(() => '');
+}
+
+async function readInputValue(input) {
+  try {
+    return await input.inputValue();
+  } catch {
+    try {
+      return await input.evaluate((node) => node.value || node.innerText || node.textContent || '');
+    } catch {
+      return '';
+    }
+  }
 }
 
 async function collectSelectorReport(page) {

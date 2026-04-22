@@ -11,6 +11,7 @@ import { runPreflight } from './preflight.js';
 
 async function main() {
   const argv = process.argv.slice(2);
+  const jsonFlag = argv.includes('--json');
   const snapshotEnabled = argv.includes('--snapshot');
   const dryRunFlag = argv.includes('--dry-run');
   const smokeFlag = argv.includes('--smoke');
@@ -20,7 +21,7 @@ async function main() {
   const restoreArgIndex = argv.indexOf('--restore');
   const restoreHash = restoreArgIndex >= 0 && /^[0-9a-f]{7,40}$/iu.test(argv[restoreArgIndex + 1] || '') ? argv[restoreArgIndex + 1] : '';
   const turnArgIndex = argv.indexOf('--turns');
-  const maxTurns = turnArgIndex >= 0 ? Number(argv[turnArgIndex + 1] || 5) : 5;
+  const maxTurns = turnArgIndex >= 0 ? Number(argv[turnArgIndex + 1] || 1) : 1;
   const input = argv.filter((arg, index) => {
     if (arg === '--turns') return false;
     if (turnArgIndex >= 0 && index === turnArgIndex + 1) return false;
@@ -29,7 +30,7 @@ async function main() {
     return !arg.startsWith('--');
   }).join(' ').trim();
   if (!input && !smokeFlag && !smokeLiveFlag && !preflightFlag && !restoreLastFlag && !restoreHash) {
-    console.error('Usage: ask-qwen [--snapshot] [--dry-run] [--smoke|--smoke-live] [--preflight] [--restore-last|--restore <hash>] [--turns <n>] <prompt>');
+    console.error('Usage: ask-qwen [--json] [--snapshot] [--dry-run] [--smoke|--smoke-live] [--preflight] [--restore-last|--restore <hash>] [--turns <n>] <prompt>');
     process.exit(1);
   }
 
@@ -66,7 +67,7 @@ async function main() {
   const logFile = resolveLogFile();
 
   // Persist lightweight structured logs so runs can be audited later.
-  await writeLogEntry({ event: 'start', prompt: input, dryRun, snapshotEnabled, maxTurns }, logFile);
+  await writeLogEntry({ event: 'start', prompt: input, dryRun, snapshotEnabled, maxTurns, outputMode: jsonFlag ? 'json' : 'text' }, logFile);
 
   if (dryRun) {
     console.log(JSON.stringify(context, null, 2));
@@ -77,8 +78,13 @@ async function main() {
   const reply = await runQwenSession(context, maxTurns);
   const parsed = parseQwenResponse(reply);
 
-  process.stdout.write(JSON.stringify(parsed, null, 2) + '\n');
-  await writeLogEntry({ event: 'finish', prompt: input, status: parsed.plan, actions: parsed.actions?.length || 0 }, logFile);
+  if (jsonFlag) {
+    process.stdout.write(JSON.stringify(parsed, null, 2) + '\n');
+  } else {
+    process.stdout.write(`${reply.trim()}\n`);
+  }
+
+  await writeLogEntry({ event: 'finish', prompt: input, status: parsed.plan, actions: parsed.actions?.length || 0, outputMode: jsonFlag ? 'json' : 'text' }, logFile);
 }
 
 main().catch((error) => {
