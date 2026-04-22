@@ -21,6 +21,7 @@ For richer Qwen back-and-forth, the relay can take one short follow-up turn when
 - `preflight.js` — dependency and environment gate
 - `modul-qwen-autotraining.js` — Qwen-first self-improvement snapshot/suggestion engine
 - `cli-autotraining.js` — CLI entrypoint for autotraining runs
+- `lifecycle.js` — graceful shutdown and resource cleanup manager
 - `secrets-check.js` — secret presence validator
 - `push-secrets.js` — Infisical push helper
 - `git.js` — optional snapshot helper
@@ -215,6 +216,7 @@ For repo-aware prompts, the relay now also includes:
 - a canonical `state_snapshot` envelope with protocol version, sender/receiver metadata, decision history, constraints, and completion criteria
 - a validator/critic review pass that scores replies, flags violations, and can strip fluff before returning text output
 - an autotraining module that stores snapshot/suggestion pairs for iterative Qwen-guided self-improvement
+- a lifecycle manager that tracks browser/CLI resources and performs bounded graceful cleanup on shutdown or fatal process events
 
 Resolved milestones:
 

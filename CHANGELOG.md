@@ -16,6 +16,7 @@
 - upgrade consult memory to a canonical `state_snapshot` envelope with decision history and metadata
 - add a deterministic validator/critic pass that scores replies, flags violations, and strips fluff when appropriate
 - add `modul-qwen-autotraining` and `cli-autotraining.js` for Qwen-guided self-improvement snapshots and suggestions
+- add `lifecycle.js` for bounded graceful shutdown and resource cleanup across CLI/browser flows
 
 ## 0.1.0
 

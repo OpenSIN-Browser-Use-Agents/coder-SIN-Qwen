@@ -33,6 +33,7 @@
 - `logger.js` — JSONL logging helper
 - `modul-qwen-autotraining.js` — Qwen-first self-improvement snapshot/suggestion orchestration
 - `cli-autotraining.js` — autotraining CLI entrypoint
+- `lifecycle.js` — graceful shutdown and registered resource cleanup
 - `OPS.md` — ops, logging, secrets, rollback
 - `SECURITY.md` — secret handling rules
 - `scripts/merge-main.sh` — guarded GitHub merge helper

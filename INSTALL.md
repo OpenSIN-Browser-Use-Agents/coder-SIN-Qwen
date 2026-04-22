@@ -91,6 +91,8 @@ node ./cli-autotraining.js "Design the next omo-SIN-Qwen improvement"
 
 Use `--json` if you want the full snapshot + suggestion output.
 
+The CLI entrypoints now attach a lifecycle manager that cleans up registered resources on signals or fatal runtime failures.
+
 If you need parsed machine-readable output instead:
 
 ```bash

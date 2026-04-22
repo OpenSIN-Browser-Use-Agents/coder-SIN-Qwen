@@ -52,6 +52,7 @@
 - The consult memory now follows a canonical `state_snapshot` envelope (`protocolVersion`, `metadata`, `mandate`, `stateSnapshot`, `decisionHistory`, `constraints`, `completionCriteria`).
 - Repo-aware replies now flow through `validator.js`, which produces a deterministic review object (`pass`, `score`, `violations`, `retry_action`) before stdout/log persistence.
 - `modul-qwen-autotraining.js` now builds snapshot/suggestion artifacts for Qwen-guided self-improvement and persists them to `.omo-sin-qwen-autotraining.jsonl` (or `SIN_OMO_QWEN_AUTOTRAINING_FILE`).
+- `lifecycle.js` now owns bounded graceful cleanup for registered resources such as browser sessions and CLI signal handling.
 - The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.
 - Resolved milestones: `#1 Stabilize ask-qwen wrapper execution`, `#2 Support real multi-turn Qwen conversations`, `#3 Keep Max Preview pinned after each turn`.
 - The repo-local OpenCode config now defines `/ask-qwen`, `/ask-qwen-json`, and the `omo-SIN-Qwen` agent directly in `.opencode/opencode.json` so the shell wrapper is no longer required.
