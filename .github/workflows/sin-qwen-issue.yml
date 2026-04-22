@@ -1,0 +1,47 @@
+name: SIN-Qwen Issue → Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: Qwen prompt
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  run-sin-qwen:
+    runs-on: self-hosted
+    steps:
+      # This workflow is intentionally self-hosted because the browser must use a real local profile.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run preflight
+      - run: npm run secrets:check || true
+
+      - name: Run SIN-Qwen
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            export CHROME_PROFILE="$HOME/.config/google-chrome/Default"
+          else
+            export CHROME_PROFILE="$HOME/Library/Application Support/Google/Chrome/Default"
+          fi
+          node ./index.js --turns 3 --snapshot "${{ inputs.prompt }}"
+
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sin-qwen-artifacts
+          path: artifacts/
+          if-no-files-found: ignore
