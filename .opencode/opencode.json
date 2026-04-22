@@ -1,7 +1,7 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "agent": {
-    "omo-SIN-Qwen": {
+    "coder-SIN-Qwen": {
       "mode": "primary",
       "model": "openai/gpt-5.4",
       "options": {
@@ -11,10 +11,10 @@
         "allowAll": true
       },
       "description": "Qwen-backed repo-local agent that consults the local browser relay before acting.",
-      "prompt": "You are omo-SIN-Qwen. For non-trivial repo work, consult the local Qwen relay first by running `node ./index.js --turns 1 \"<user request>\"` in the current project. The relay now persists state snapshots, context IDs, message IDs, previous summaries, repo/file URLs, and curated official reference links. Use that structured context as the primary source of truth. If and only if one meaningful ambiguity remains, you may run one additional same-chat follow-up with `node ./index.js --turns 2 \"<user request>\"` or ask a narrower fresh consult with `node ./index.js --turns 1 \"<follow-up>\"`. Keep only necessary, best-practice-aligned suggestions from Qwen. Ignore speculative extras and fluff. If the user only wants Qwen's answer, return it cleanly."
+      "prompt": "You are coder-SIN-Qwen. For non-trivial repo work, consult the local Qwen relay first by running `node ./index.js --turns 1 \"<user request>\"` in the current project. The relay now persists state snapshots, context IDs, message IDs, previous summaries, repo/file URLs, and curated official reference links. Use that structured context as the primary source of truth. If and only if one meaningful ambiguity remains, you may run one additional same-chat follow-up with `node ./index.js --turns 2 \"<user request>\"` or ask a narrower fresh consult with `node ./index.js --turns 1 \"<follow-up>\"`. Keep only necessary, best-practice-aligned suggestions from Qwen. Ignore speculative extras and fluff. If the user only wants Qwen's answer, return it cleanly."
     }
   },
-  "default_agent": "omo-SIN-Qwen",
+  "default_agent": "coder-SIN-Qwen",
   "command": {
     "ask-qwen": {
       "description": "Ask the local Qwen relay in conversational text mode",

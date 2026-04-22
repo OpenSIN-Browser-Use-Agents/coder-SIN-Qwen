@@ -28,5 +28,5 @@ export GH_TOKEN="${GH_TOKEN:-$(gh auth token)}"
 branch="$(git branch --show-current)"
 
 git fetch origin main >/dev/null 2>&1 || true
-gh pr create --base main --head "$branch" --title "Merge $branch into main" --body "Automated merge request from omo-SIN-Qwen." || true
+gh pr create --base main --head "$branch" --title "Merge $branch into main" --body "Automated merge request from coder-SIN-Qwen." || true
 gh pr merge --merge --auto --delete-branch
