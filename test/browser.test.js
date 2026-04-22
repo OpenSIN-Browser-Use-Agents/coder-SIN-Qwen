@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPromptPayload, resolveChromeConnectionConfig, resolveChromeLaunchConfig, summarizeSelectorReport, withRetry } from '../browser.js';
+import { buildConversationFollowUpPrompt, buildPromptPayload, resolveChromeConnectionConfig, resolveChromeLaunchConfig, shouldContinueConversation, summarizeSelectorReport, withRetry } from '../browser.js';
 
 test('builds prompt payload strings', () => {
   // Objects should become a normal readable operator message instead of a raw JSON blob.
@@ -72,4 +72,17 @@ test('enables attach mode when CDP url is configured', () => {
     if (previousCdp === undefined) delete process.env.CHROME_CDP_URL;
     else process.env.CHROME_CDP_URL = previousCdp;
   }
+});
+
+test('detects when a refined follow-up is worth asking', () => {
+  assert.equal(shouldContinueConversation('If you want, I can also suggest the next best step.'), true);
+  assert.equal(shouldContinueConversation('Hello!'), false);
+  assert.equal(shouldContinueConversation('Here are three concrete next steps:\n- Run verify\n- Commit changes\n- Re-test'), true);
+});
+
+test('builds a fresh follow-up prompt from the original request and reply', () => {
+  const prompt = buildConversationFollowUpPrompt('Review the repo', 'You should run verify and then clean the working tree.');
+  assert.match(prompt, /Original request:\nReview the repo/);
+  assert.match(prompt, /Previous answer:/);
+  assert.match(prompt, /run verify/);
 });
