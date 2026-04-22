@@ -23,10 +23,25 @@ test('builds prompt payload strings', () => {
     fileReferences: [{ path: 'index.js', url: 'https://github.com/example/repo/blob/abc123/index.js' }],
     references: [{ label: 'Playwright docs', url: 'https://playwright.dev/docs/intro', reason: 'Browser automation docs' }],
     stateSnapshot: {
-      contextId: 'ctx-1',
+      protocolVersion: 'A2A-v2.1-lite',
       messageId: 'msg-1',
-      previousMessageId: 'msg-0',
-      previousSummary: 'Previous summary here.'
+      metadata: {
+        contextId: 'ctx-1',
+        previousMessageId: 'msg-0',
+        sender: 'omo-SIN-Qwen',
+        receiver: 'Qwen'
+      },
+      mandate: 'Check the repo',
+      previousSummary: 'Previous summary here.',
+      stateSnapshot: {
+        repositoryUrl: 'https://github.com/example/repo',
+        commitUrl: 'https://github.com/example/repo/commit/abc123',
+        treeUrl: 'https://github.com/example/repo/tree/abc123',
+        branch: 'main',
+        head: 'abc123',
+        dirty: false
+      },
+      decisionHistory: [{ timestamp: '2026-04-22T00:00:00Z', status: 'final', summary: 'Previous decision.' }]
     },
     constraints: ['Use the provided URLs.'],
     completionCriteria: ['Return production-ready output only.'],
@@ -35,7 +50,10 @@ test('builds prompt payload strings', () => {
   assert.match(payload, /Task:\nCheck the repo/);
   assert.match(payload, /repo url: https:\/\/github.com\/example\/repo/);
   assert.match(payload, /Persistent consult state:/);
+  assert.match(payload, /protocol version: A2A-v2.1-lite/);
   assert.match(payload, /context id: ctx-1/);
+  assert.match(payload, /Decision history:/);
+  assert.match(payload, /Previous decision\./);
   assert.match(payload, /Relevant file URLs:/);
   assert.match(payload, /Playwright docs: https:\/\/playwright.dev\/docs\/intro/);
   assert.match(payload, /Completion criteria:/);

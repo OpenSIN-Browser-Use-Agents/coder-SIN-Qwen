@@ -173,6 +173,8 @@ export function buildPromptPayload(context) {
   const fileReferences = Array.isArray(context.fileReferences) ? context.fileReferences : [];
   const references = Array.isArray(context.references) ? context.references : [];
   const stateSnapshot = context.stateSnapshot || null;
+  const envelope = stateSnapshot?.stateSnapshot || null;
+  const decisionHistory = Array.isArray(stateSnapshot?.decisionHistory) ? stateSnapshot.decisionHistory : [];
   const constraints = Array.isArray(context.constraints) ? context.constraints : [];
   const completionCriteria = Array.isArray(context.completionCriteria) ? context.completionCriteria : [];
   const rules = Array.isArray(context.rules) ? context.rules : [];
@@ -191,10 +193,25 @@ export function buildPromptPayload(context) {
     `- commit url: ${context.repo?.urls?.commit || 'N/A'}`,
     '',
     'Persistent consult state:',
-    `- context id: ${stateSnapshot?.contextId || 'N/A'}`,
+    `- protocol version: ${stateSnapshot?.protocolVersion || 'N/A'}`,
+    `- context id: ${stateSnapshot?.metadata?.contextId || 'N/A'}`,
     `- message id: ${stateSnapshot?.messageId || 'N/A'}`,
-    `- previous message id: ${stateSnapshot?.previousMessageId || 'N/A'}`,
+    `- previous message id: ${stateSnapshot?.metadata?.previousMessageId || 'N/A'}`,
+    `- sender: ${stateSnapshot?.metadata?.sender || 'N/A'}`,
+    `- receiver: ${stateSnapshot?.metadata?.receiver || 'N/A'}`,
+    `- mandate: ${stateSnapshot?.mandate || 'N/A'}`,
     `- previous summary: ${stateSnapshot?.previousSummary || 'N/A'}`,
+    '',
+    'State snapshot:',
+    `- repository url: ${envelope?.repositoryUrl || context.repo?.urls?.web || 'N/A'}`,
+    `- commit url: ${envelope?.commitUrl || context.repo?.urls?.commit || 'N/A'}`,
+    `- tree url: ${envelope?.treeUrl || context.repo?.urls?.tree || 'N/A'}`,
+    `- branch: ${envelope?.branch || context.repo?.branch || 'N/A'}`,
+    `- head: ${envelope?.head || context.repo?.head || 'N/A'}`,
+    `- dirty: ${String(envelope?.dirty ?? context.repo?.dirty ?? false)}`,
+    '',
+    'Decision history:',
+    ...decisionHistory.map((entry) => `- ${entry.timestamp || 'N/A'} [${entry.status || 'unknown'}]: ${entry.summary || entry.prompt || 'N/A'}`),
     '',
     'Package context:',
     `- name: ${context.package?.name || 'N/A'}`,
