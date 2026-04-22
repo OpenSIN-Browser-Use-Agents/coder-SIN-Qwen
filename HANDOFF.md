@@ -41,3 +41,4 @@
 - Default profile path is resolved automatically per OS.
 - The browser selectors are intentionally conservative and may need updates when Qwen UI changes.
 - Attach mode now prefers reusing an existing blank tab and leaves the attached tab open.
+- Non-interactive Infisical sync now expects `INFISICAL_PROJECT_ID` when the repo is not linked with `infisical init`.

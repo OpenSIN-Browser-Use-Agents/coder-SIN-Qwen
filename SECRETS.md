@@ -39,7 +39,9 @@ node ./secrets-check.js
 If the active Infisical project is already correct:
 
 ```bash
+export INFISICAL_PROJECT_ID="your-project-id"
 npm run secrets:push
 ```
 
 This only pushes values that are actually present in `process.env` or `.env.local`.
+The repo uses `INFISICAL_PROJECT_ID` for non-interactive CLI runs when `.infisical.json` is not linked.

@@ -14,9 +14,13 @@ export function collectSecretEntries(env = process.env, localEnv = loadEnvFile()
 export function pushSecrets(entries, options = {}) {
   const envName = options.envName || process.env.INFISICAL_ENV_NAME || 'dev';
   const secretPath = options.secretPath || process.env.INFISICAL_SECRET_PATH || '/';
+  const projectId = options.projectId || process.env.INFISICAL_PROJECT_ID || '';
 
   for (const [name, value] of entries) {
-    execFileSync('infisical', ['secrets', 'set', `${name}=${value}`, '--env', envName, '--path', secretPath, '--silent'], {
+    const args = ['secrets', 'set', `${name}=${value}`, '--env', envName, '--path', secretPath, '--silent'];
+    if (projectId) args.push('--projectId', projectId);
+
+    execFileSync('infisical', args, {
       stdio: 'inherit'
     });
   }
@@ -32,6 +36,11 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (!apply) {
     console.log(JSON.stringify({ ok: status.requiredMissing.length === 0, apply: false, entries: entries.map(([name]) => name), ...status }, null, 2));
     process.exit(status.requiredMissing.length === 0 ? 0 : 1);
+  }
+
+  if (!process.env.INFISICAL_PROJECT_ID) {
+    console.error('INFISICAL_PROJECT_ID is required for non-interactive secrets:push runs when the repo is not linked with infisical init.');
+    process.exit(1);
   }
 
   pushSecrets(entries);

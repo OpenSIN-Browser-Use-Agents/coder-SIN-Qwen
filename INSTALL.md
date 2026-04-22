@@ -83,6 +83,7 @@ npm run secrets:check
 If the target Infisical project is already correct and you want to publish current values:
 
 ```bash
+export INFISICAL_PROJECT_ID="your-project-id"
 npm run secrets:push
 ```
 
@@ -131,11 +132,13 @@ Detailed sequence: `LIVE_RUNBOOK.md`
 
 ## 11. GitHub merge helper
 
-If you want the guarded merge helper, set `ALLOW_GH_MERGE=1` and `GH_TOKEN` before running:
+If you want the guarded merge helper, set `ALLOW_GH_MERGE=1` before running:
 
 ```bash
 npm run merge:main
 ```
+
+If `GH_TOKEN` is not already exported, the helper will use `gh auth token` automatically.
 
 Detailed sequence: `MERGE_RUNBOOK.md`
 

@@ -198,10 +198,12 @@ Live smoke checks and browser failures can write screenshots to `artifacts/` (or
 Use `npm run secrets:pull` after configuring Infisical locally.
 Validate secret presence with `npm run secrets:check` and see `SECRETS.md`.
 Push available values with `npm run secrets:push` only when the target Infisical project is correct.
+For non-interactive use, set `INFISICAL_PROJECT_ID` first.
 
 ## Merge
 
-Use `npm run merge:main` only when `ALLOW_GH_MERGE=1` and `GH_TOKEN` are set.
+Use `npm run merge:main` only when `ALLOW_GH_MERGE=1` is set.
+The helper falls back to `gh auth token` when `GH_TOKEN` is not exported.
 If the repo has no remote yet, bootstrap one with `npm run remote:init` and `ALLOW_GH_REMOTE_CREATE=1`.
 
 ## Notes
