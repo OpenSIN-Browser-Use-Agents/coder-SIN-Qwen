@@ -18,16 +18,22 @@ export async function buildContext({ prompt }) {
   const ig = loadIgnorePatterns(cwd);
   const filteredFiles = filterPaths(files, ig).slice(0, 60);
   const gitMeta = await readGitMeta(cwd);
+  const repoUrls = buildRepoUrls(gitRemote, gitMeta.head);
+  const fileReferences = buildFileReferences(filteredFiles, prompt, repoUrls.blobBase);
+  const references = buildBestPracticeReferences(prompt, pkg, filteredFiles, repoUrls.web);
 
   return {
     prompt,
     repo: {
       cwd,
       remote: gitRemote,
-      ...gitMeta
+      ...gitMeta,
+      urls: repoUrls
     },
     package: pkg,
     files: filteredFiles,
+    fileReferences,
+    references,
     rules: [
       'SIN-Qwen is a relay proxy, not a thinking agent.',
       'Return production-ready output only.',
@@ -127,4 +133,109 @@ async function collectProjectFiles(root) {
   }
 
   return results.sort();
+}
+
+function buildRepoUrls(remote, head) {
+  const web = normalizeGitRemoteToWebUrl(remote);
+  return {
+    web,
+    tree: web && head !== 'N/A' ? `${web}/tree/${head}` : '',
+    commit: web && head !== 'N/A' ? `${web}/commit/${head}` : '',
+    blobBase: web && head !== 'N/A' ? `${web}/blob/${head}` : ''
+  };
+}
+
+function normalizeGitRemoteToWebUrl(remote) {
+  const value = String(remote || '').trim();
+  if (!value || value === 'N/A') return '';
+  if (value.startsWith('git@github.com:')) {
+    return `https://github.com/${value.replace('git@github.com:', '').replace(/\.git$/u, '')}`;
+  }
+  if (value.startsWith('https://github.com/')) {
+    return value.replace(/\.git$/u, '');
+  }
+  return '';
+}
+
+function buildFileReferences(files, prompt, blobBase, limit = 12) {
+  const ranked = rankRelevantFiles(files, prompt).slice(0, limit);
+  return ranked.map((file) => ({
+    path: file,
+    url: blobBase ? `${blobBase}/${file}` : ''
+  }));
+}
+
+function rankRelevantFiles(files, prompt) {
+  const tokens = tokenizePrompt(prompt);
+  return [...files].sort((left, right) => scoreFile(right, tokens) - scoreFile(left, tokens) || left.localeCompare(right));
+}
+
+function tokenizePrompt(prompt) {
+  return [...new Set(String(prompt || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .filter((token) => token.length >= 3)
+    .filter((token) => !new Set(['the', 'and', 'with', 'from', 'that', 'this', 'repo', 'code', 'file', 'files', 'your']).has(token)))];
+}
+
+function scoreFile(file, tokens) {
+  const lower = file.toLowerCase();
+  let score = 0;
+  for (const token of tokens) {
+    if (lower.includes(token)) score += 3;
+    if (path.posix.basename(lower).includes(token)) score += 2;
+  }
+  if (/readme|install|handoff|index|change(log)?|ops|security|secrets/u.test(lower)) score += 1;
+  if (/browser|context|parser|verify|smoke|test/u.test(lower)) score += 2;
+  return score;
+}
+
+function buildBestPracticeReferences(prompt, pkg, files, repoWebUrl) {
+  const joined = `${prompt} ${files.join(' ')} ${pkg.dependencies.join(' ')} ${pkg.devDependencies.join(' ')}`.toLowerCase();
+  const references = [];
+
+  if (repoWebUrl) {
+    references.push({
+      label: 'Repository URL',
+      url: repoWebUrl,
+      reason: 'Use for repo-wide browsing and linked file context.'
+    });
+  }
+
+  references.push({
+    label: 'Node.js API docs',
+    url: 'https://nodejs.org/docs/latest/api/',
+    reason: 'Authoritative Node runtime and standard-library reference.'
+  });
+
+  if (joined.includes('playwright') || joined.includes('browser') || joined.includes('cdp')) {
+    references.push({
+      label: 'Playwright docs',
+      url: 'https://playwright.dev/docs/intro',
+      reason: 'Current browser automation best practices and API behavior.'
+    });
+  }
+
+  if (joined.includes('github') || joined.includes('workflow') || joined.includes('release') || joined.includes('ci')) {
+    references.push({
+      label: 'GitHub Actions docs',
+      url: 'https://docs.github.com/actions',
+      reason: 'Official CI/CD and workflow guidance.'
+    });
+  }
+
+  if (joined.includes('secret') || joined.includes('infisical')) {
+    references.push({
+      label: 'Infisical CLI export docs',
+      url: 'https://infisical.com/docs/cli/commands/export',
+      reason: 'Official export and sync behavior for secret workflows.'
+    });
+    references.push({
+      label: 'Infisical CLI secrets docs',
+      url: 'https://infisical.com/docs/cli/commands/secrets',
+      reason: 'Official secret set/get and path behavior.'
+    });
+  }
+
+  return references;
 }
