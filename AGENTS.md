@@ -32,4 +32,4 @@ node ./verify.js
 - `node ./index.js <prompt>`
 - `npm run verify`
 - `npm run ask`
-- `/ask-qwen` through `.opencode/commands/ask-qwen.sh`
+- `/ask-qwen` through `.opencode/opencode.json`

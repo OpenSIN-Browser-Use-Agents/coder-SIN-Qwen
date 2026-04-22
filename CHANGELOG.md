@@ -9,6 +9,7 @@
 - switched the default CLI output to raw Qwen text and added explicit `--json` mode
 - auto-select `Qwen3.6-Max-Preview` before sending live prompts
 - keep extra Qwen turns opt-in only and wait for assistant text to stabilize before reading it
+- replace the local shell wrapper with repo-local OpenCode command templates in `.opencode/opencode.json`
 
 ## 0.1.0
 
