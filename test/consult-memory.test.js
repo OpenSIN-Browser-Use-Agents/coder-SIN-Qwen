@@ -7,7 +7,7 @@ import { hydrateConsultContext, persistConsultMemory } from '../consult-memory.j
 
 test('hydrates repo context with state snapshot and ids', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'omo-memory-'));
-  process.env.SIN_OMO_QWEN_MEMORY_FILE = path.join(tempDir, 'memory.json');
+  process.env.SIN_CODER_QWEN_MEMORY_FILE = path.join(tempDir, 'memory.json');
 
   const result = await hydrateConsultContext({
     prompt: 'Review the repo',
@@ -34,14 +34,14 @@ test('hydrates repo context with state snapshot and ids', async () => {
   assert.equal(result.context.stateSnapshot.stateSnapshot.repositoryUrl, 'https://github.com/example/repo');
   assert.equal(result.context.stateSnapshot.stateSnapshot.affectedFiles[0].path, 'index.js');
 
-  delete process.env.SIN_OMO_QWEN_MEMORY_FILE;
+  delete process.env.SIN_CODER_QWEN_MEMORY_FILE;
   await fs.rm(tempDir, { recursive: true, force: true });
 });
 
 test('persists and reuses consult memory context id', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'omo-memory-'));
   const memoryFile = path.join(tempDir, 'memory.json');
-  process.env.SIN_OMO_QWEN_MEMORY_FILE = memoryFile;
+  process.env.SIN_CODER_QWEN_MEMORY_FILE = memoryFile;
 
   const baseContext = {
     prompt: 'Review the repo',
@@ -77,6 +77,6 @@ test('persists and reuses consult memory context id', async () => {
   assert.equal(second.context.stateSnapshot.decisionHistory.length, 1);
   assert.equal(second.context.stateSnapshot.decisionHistory[0].summary, 'Run verify first.');
 
-  delete process.env.SIN_OMO_QWEN_MEMORY_FILE;
+  delete process.env.SIN_CODER_QWEN_MEMORY_FILE;
   await fs.rm(tempDir, { recursive: true, force: true });
 });

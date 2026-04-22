@@ -49,7 +49,7 @@ test('builds suggestion payload from review result', () => {
 
 test('persists snapshot and suggestion artifacts', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'omo-autotraining-'));
-  process.env.SIN_OMO_QWEN_AUTOTRAINING_FILE = path.join(tempDir, 'autotraining.jsonl');
+  process.env.SIN_CODER_QWEN_AUTOTRAINING_FILE = path.join(tempDir, 'autotraining.jsonl');
 
   await persistAutotrainingArtifacts({
     snapshot: { id: 'snap_test' },
@@ -61,6 +61,6 @@ test('persists snapshot and suggestion artifacts', async () => {
   assert.match(content, /"type":"snapshot"/);
   assert.match(content, /"type":"suggestion"/);
 
-  delete process.env.SIN_OMO_QWEN_AUTOTRAINING_FILE;
+  delete process.env.SIN_CODER_QWEN_AUTOTRAINING_FILE;
   await fs.rm(tempDir, { recursive: true, force: true });
 });

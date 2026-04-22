@@ -28,7 +28,7 @@ test('builds prompt payload strings', () => {
       metadata: {
         contextId: 'ctx-1',
         previousMessageId: 'msg-0',
-        sender: 'omo-SIN-Qwen',
+        sender: 'coder-SIN-Qwen',
         receiver: 'Qwen'
       },
       mandate: 'Check the repo',
