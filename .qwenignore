@@ -10,3 +10,5 @@ build
 *.lockb
 .env
 .env.*
+artifacts
+.chrome-cdp-sidecar*

@@ -29,28 +29,34 @@ function extractStructuredPayload(raw) {
   const candidates = [fenced, raw].filter(Boolean);
 
   for (const candidate of candidates) {
-    const jsonText = isolateJson(candidate);
-    if (!jsonText) continue;
-
-    try {
-      return JSON.parse(jsonText);
-    } catch {
-      continue;
+    const jsonTexts = isolateJsonCandidates(candidate);
+    for (const jsonText of jsonTexts) {
+      try {
+        return JSON.parse(jsonText);
+      } catch {
+        continue;
+      }
     }
   }
 
   return null;
 }
 
-function isolateJson(text) {
-  // Trim surrounding prose away so JSON.parse gets the cleanest possible payload.
+function isolateJsonCandidates(text) {
+  // Some Qwen pages contain the sent prompt JSON plus the final assistant JSON.
+  // Prefer later payloads that look like the real assistant result instead of the echoed prompt block.
   const trimmed = String(text || '').trim();
-  const start = trimmed.search(/[\[{]/u);
-  if (start === -1) return null;
+  const matches = [];
 
-  const candidate = trimmed.slice(start);
-  const end = findMatchingJsonEnd(candidate);
-  return end === -1 ? candidate : candidate.slice(0, end + 1);
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (!/[\[{]/u.test(trimmed[index])) continue;
+    const candidate = trimmed.slice(index);
+    const end = findMatchingJsonEnd(candidate);
+    if (end === -1) continue;
+    matches.push(candidate.slice(0, end + 1));
+  }
+
+  return prioritizeJsonCandidates(matches);
 }
 
 function findMatchingJsonEnd(text) {
@@ -115,6 +121,24 @@ function normalizeStructuredPayload(payload, raw) {
     warnings: Array.isArray(payload.warnings) ? payload.warnings.map(String) : [],
     payload
   };
+}
+
+function prioritizeJsonCandidates(matches) {
+  const unique = [...new Set(matches)];
+  return unique.sort((left, right) => scoreJsonCandidate(right) - scoreJsonCandidate(left));
+}
+
+function scoreJsonCandidate(candidate) {
+  // Real assistant payloads usually contain summary/actions/files/status, while echoed prompt context contains prompt/repo/package.
+  let score = 0;
+  if (/"status"\s*:/u.test(candidate)) score += 8;
+  if (/"summary"\s*:/u.test(candidate)) score += 4;
+  if (/"actions"\s*:/u.test(candidate)) score += 4;
+  if (/"files"\s*:/u.test(candidate)) score += 2;
+  if (/"prompt"\s*:/u.test(candidate)) score -= 6;
+  if (/"repo"\s*:/u.test(candidate)) score -= 4;
+  if (/"package"\s*:/u.test(candidate)) score -= 4;
+  return score;
 }
 
 function extractActions(raw) {

@@ -27,8 +27,7 @@ export async function buildContext({ prompt }) {
     rules: [
       'SIN-Qwen is a relay proxy, not a thinking agent.',
       'Return production-ready output only.',
-      'Prefer complete files over partial snippets.',
-      'End with JSON status metadata.'
+      'Prefer complete files over partial snippets.'
     ]
   };
 }

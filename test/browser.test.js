@@ -3,9 +3,15 @@ import assert from 'node:assert/strict';
 import { buildPromptPayload, resolveChromeConnectionConfig, resolveChromeLaunchConfig, summarizeSelectorReport, withRetry } from '../browser.js';
 
 test('builds prompt payload strings', () => {
-  // Objects should stay JSON stringified so the model receives stable structured context.
+  // Objects should become a normal readable operator message instead of a raw JSON blob.
   assert.equal(buildPromptPayload('hello'), 'hello');
-  assert.match(buildPromptPayload({ a: 1 }), /"a": 1/);
+  assert.match(buildPromptPayload({
+    prompt: 'Check the repo',
+    repo: { cwd: '/tmp/project', remote: 'origin', branch: 'main', head: 'abc123', dirty: false },
+    package: { name: 'demo', version: '1.0.0', scripts: ['test'], dependencies: ['playwright'] },
+    files: ['index.js'],
+    rules: ['Return production-ready output only.']
+  }), /Task:\nCheck the repo/);
 });
 
 test('retries flaky actions', async () => {

@@ -21,3 +21,12 @@ test('extracts freeform actions and files', () => {
   assert.ok(result.actions.length >= 2);
   assert.ok(result.files.includes('README.md'));
 });
+
+test('prefers final assistant json over echoed prompt json', () => {
+  const result = parseQwenResponse('{"prompt":"hello","repo":{"dirty":false}}\n\n{"summary":"health-check","actions":["ok"],"files":[],"warnings":[],"status":"final"}');
+
+  assert.equal(result.plan, 'structured-json');
+  assert.equal(result.summary, 'health-check');
+  assert.deepEqual(result.actions, ['ok']);
+  assert.equal(result.payload.status, 'final');
+});

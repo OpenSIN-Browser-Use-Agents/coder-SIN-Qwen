@@ -7,11 +7,11 @@ import { chromium } from 'playwright';
 const QWEN_URL = 'https://chat.qwen.ai';
 // Centralized selector map so UI changes stay localized.
 export const SELECTORS = {
-  newChat: ['button:has-text("New Chat")', 'button:has-text("Neuer Chat")', '[data-testid="new-chat"]'],
+  newChat: ['button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', '[data-testid="new-chat"]'],
   modelMenu: ['button:has-text("Model")', 'button:has-text("Modell")', '[data-testid="model-selector"]'],
   promptInput: ['textarea', '[contenteditable="true"]', 'input[type="text"]', 'textarea[aria-label*="message" i]', 'input[aria-label*="prompt" i]'],
-  sendButton: ['button[type="submit"]', 'button[aria-label*="send" i]', 'button:has-text("Send")', 'button:has-text("Senden")'],
-  assistantOutput: ['[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.message-content', '.chat-message .content']
+  sendButton: ['.send-button', 'button[type="submit"]', 'button[aria-label*="send" i]', 'button:has-text("Send")', 'button:has-text("Senden")'],
+  assistantOutput: ['.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.message-content', '.chat-message .content']
 };
 
 export async function runQwenSession(input, maxTurns = 5) {
@@ -160,15 +160,44 @@ export async function sendToQwen(input) {
 }
 
 export function buildPromptPayload(context) {
-  // Keep payload generation deterministic so logs and snapshots are easier to compare.
-  return typeof context === 'string' ? context : JSON.stringify(context, null, 2);
+  // Keep payload generation deterministic, but phrase structured context like a normal operator message.
+  if (typeof context === 'string') return context;
+
+  const files = Array.isArray(context.files) ? context.files : [];
+  const rules = Array.isArray(context.rules) ? context.rules : [];
+  const scripts = context.package?.scripts?.join(', ') || 'N/A';
+  const dependencies = context.package?.dependencies?.join(', ') || 'N/A';
+
+  return [
+    `Task:\n${context.prompt}`,
+    'Repository context:',
+    `- cwd: ${context.repo?.cwd || 'N/A'}`,
+    `- remote: ${context.repo?.remote || 'N/A'}`,
+    `- branch: ${context.repo?.branch || 'N/A'}`,
+    `- head: ${context.repo?.head || 'N/A'}`,
+    `- dirty: ${Boolean(context.repo?.dirty)}`,
+    '',
+    'Package context:',
+    `- name: ${context.package?.name || 'N/A'}`,
+    `- version: ${context.package?.version || 'N/A'}`,
+    `- scripts: ${scripts}`,
+    `- dependencies: ${dependencies}`,
+    '',
+    'Relevant files:',
+    ...files.map((file) => `- ${file}`),
+    '',
+    'Rules:',
+    ...rules.map((rule) => `- ${rule}`),
+    '',
+    'Please reply like a normal coding assistant and keep the answer directly useful.'
+  ].join('\n');
 }
 
 export function buildSessionPrompt(input) {
   const payload = buildPromptPayload(input);
   return typeof input === 'string'
     ? payload
-    : `${payload}\n\nRules: return complete production-ready code only, and end with {"status":"draft"|"final"}.`;
+    : payload;
 }
 
 export async function withRetry(fn, attempts = 3) {
@@ -293,8 +322,8 @@ async function openChromeSession(launchConfig, options) {
     return {
       page,
       close: async () => {
-        // In attach mode the tab belongs to the operator's existing Chrome session.
-        // Leave it open so smoke checks do not briefly flash a useful tab and then close it.
+        // Disconnect from the borrowed browser session without closing the operator's Chrome window.
+        await browser.close().catch(() => {});
       }
     };
   }
@@ -422,7 +451,15 @@ async function submitPrompt(page) {
 }
 
 async function waitForStreamingDone(page) {
-  // Wait for the obvious streaming indicators to disappear before reading the reply.
+  // Wait for the assistant message to appear before checking whether streaming has finished.
+  await page.waitForFunction((selectors) => {
+    return selectors.some((selector) => {
+      return Array.from(document.querySelectorAll(selector)).some((element) => {
+        return (element.innerText || '').trim().length > 0;
+      });
+    });
+  }, SELECTORS.assistantOutput, { timeout: 120_000, polling: 1_000 }).catch(() => {});
+
   await page.waitForTimeout(2_000);
   await page.waitForFunction(() => {
     const hasStopButton = Array.from(document.querySelectorAll('button'))
