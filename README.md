@@ -172,6 +172,7 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 - `--json` — print the parsed machine-readable payload instead of raw Qwen text
 - `SIN_OMO_QWEN_LOG_FILE` — JSONL log destination
 - `SIN_OMO_QWEN_ARTIFACT_DIR` — screenshot output directory
+- `SIN_OMO_QWEN_MEMORY_FILE` — persistent consult memory file (defaults to `.omo-sin-qwen-memory.json`)
 - `INFISICAL_ENV_NAME` — Infisical environment slug for sync commands
 - `INFISICAL_SECRET_PATH` — Infisical folder path for sync commands
 - `INFISICAL_PROJECT_ID` — Infisical project id for non-interactive pull/push flows
@@ -201,6 +202,7 @@ For repo-aware prompts, the relay now also includes:
 - commit URL
 - selected file URLs from the current repo state
 - curated official reference URLs for relevant technologies such as Node.js, Playwright, GitHub Actions, and Infisical when applicable
+- persistent consult metadata (`context_id`, `message_id`, previous summary)
 
 Resolved milestones:
 

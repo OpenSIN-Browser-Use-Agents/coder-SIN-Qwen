@@ -16,6 +16,7 @@
 - live chat auto-selects `Qwen3.6-Max-Preview` before sending the prompt
 - extra turns happen only when `--turns 2+` is requested, and they continue in the same chat
 - repo-aware prompts include repository/file URLs plus curated official reference URLs for the current stack
+- repo-aware consults persist `context_id`, `message_id`, and a compact previous summary in `.omo-sin-qwen-memory.json`
 - `preflight.js` — dependency and env checks
 - `secrets-check.js` — secret presence checks
 - `SECRETS.md` — Infisical and env checklist
