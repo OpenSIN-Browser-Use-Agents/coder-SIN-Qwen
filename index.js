@@ -118,24 +118,10 @@ function writeStdout(text) {
 }
 
 async function runControlledConversation(initialContext, originalPrompt, maxTurns, sessionTimeoutMs) {
-  // Keep each browser consult single-turn and deterministic; multi-turn behavior is built by chaining
-  // fresh chats instead of relying on a brittle in-page conversation loop.
-  let currentInput = initialContext;
-  let reply = '';
-
-  for (let turn = 1; turn <= maxTurns; turn += 1) {
-    reply = await withTimeout(
-      runQwenSession(currentInput),
-      sessionTimeoutMs,
-      `Qwen session timed out after ${sessionTimeoutMs}ms`
-    );
-
-    if (turn >= maxTurns) break;
-    if (typeof initialContext === 'string') break;
-    if (!shouldContinueConversation(reply)) break;
-
-    currentInput = buildConversationFollowUpPrompt(originalPrompt, reply);
-  }
-
-  return reply;
+  // Keep same-chat follow-ups inside one browser session when explicit extra turns are requested.
+  return withTimeout(
+    runQwenSession(initialContext, { maxTurns, originalPrompt }),
+    sessionTimeoutMs,
+    `Qwen session timed out after ${sessionTimeoutMs}ms`
+  );
 }

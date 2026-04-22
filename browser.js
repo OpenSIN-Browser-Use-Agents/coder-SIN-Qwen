@@ -14,8 +14,10 @@ export const SELECTORS = {
   assistantOutput: ['.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.message-content', '.chat-message .content']
 };
 
-export async function runQwenSession(input) {
-  // The browser relay itself stays single-turn; higher-level orchestration can chain multiple fresh consults.
+export async function runQwenSession(input, options = {}) {
+  // The browser relay can stay in one chat when explicit multi-turn behavior is requested.
+  const maxTurns = Number(options.maxTurns || 1);
+  const originalPrompt = options.originalPrompt || (typeof input === 'string' ? input : input?.prompt || '');
   const connectionConfig = resolveChromeConnectionConfig();
   ensureProfileExists(connectionConfig.profilePath);
   const session = await openChromeSession(connectionConfig, {
@@ -37,21 +39,33 @@ export async function runQwenSession(input) {
     await waitForStableUi(page);
     await maybeStartNewChat(page);
     await maybeSelectModel(page);
+    await ensureMaxPreviewSelected(page);
 
-    const prompt = buildSessionPrompt(input);
     const inputBox = await findPromptInput(page);
     if (!inputBox) {
       throw new Error('Qwen prompt input not found in the Chrome Default profile session.');
     }
 
-    const previousAssistantState = await getLastAssistantState(page);
-    await enterPrompt(inputBox, prompt);
-    await submitPrompt(page, inputBox, prompt);
-    await waitForStreamingDone(page, previousAssistantState);
+    let currentPrompt = buildSessionPrompt(input);
+    let responseText = '';
 
-    const responseText = await getLastAssistantText(page);
-    if (!responseText) {
-      throw new Error('No assistant response could be extracted from the Qwen UI.');
+    for (let turn = 1; turn <= maxTurns; turn += 1) {
+      const previousAssistantState = await getLastAssistantState(page);
+      await ensureMaxPreviewSelected(page);
+      await enterPrompt(inputBox, currentPrompt);
+      await submitPrompt(page, inputBox, currentPrompt, previousAssistantState);
+      await waitForStreamingDone(page, previousAssistantState);
+      await waitForPromptReady(page);
+
+      responseText = await getLastAssistantText(page);
+      if (!responseText) {
+        throw new Error('No assistant response could be extracted from the Qwen UI.');
+      }
+
+      if (turn >= maxTurns) break;
+      if (!shouldContinueConversation(responseText)) break;
+
+      currentPrompt = buildConversationFollowUpPrompt(originalPrompt, responseText);
     }
 
     return responseText;
@@ -144,7 +158,7 @@ export async function runBrowserE2ECheck() {
 }
 
 export async function sendToQwen(input) {
-  return runQwenSession(input);
+  return runQwenSession(input, { maxTurns: 1 });
 }
 
 export function buildPromptPayload(context) {
@@ -415,6 +429,25 @@ async function maybeSelectModel(page) {
   return result;
 }
 
+async function ensureMaxPreviewSelected(page) {
+  // Some Qwen pages silently fall back to Plus after navigation; enforce the desired model before each send.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const currentModel = await readCurrentModel(page);
+    if (currentModel.includes('Qwen3.6-Max-Preview')) return;
+    await maybeSelectModel(page);
+    await page.waitForTimeout(1_000);
+  }
+
+  const currentModel = await readCurrentModel(page);
+  if (!currentModel.includes('Qwen3.6-Max-Preview')) {
+    throw new Error(`Qwen model selection failed. Expected Qwen3.6-Max-Preview but found ${currentModel || 'unknown model'}.`);
+  }
+}
+
+async function readCurrentModel(page) {
+  return page.locator('.index-module__model-selector-text___XvWe0').innerText().catch(() => '');
+}
+
 async function findPromptInput(page) {
   for (const selector of SELECTORS.promptInput) {
     const locator = page.locator(selector).first();
@@ -448,7 +481,7 @@ async function enterPrompt(input, prompt) {
   await input.type(prompt, { delay: 4 });
 }
 
-async function submitPrompt(page, input, prompt) {
+async function submitPrompt(page, input, prompt, previousAssistantState = { count: 0, text: '' }) {
   // Press Enter first because the current Qwen UI sends naturally from the focused text box.
   await page.waitForTimeout(150);
   await input.focus().catch(() => {});
@@ -464,14 +497,14 @@ async function submitPrompt(page, input, prompt) {
     await page.keyboard.press('Enter').catch(() => {});
   }
 
-  await page.waitForTimeout(700);
+  if (await waitForSubmissionKickoff(page, input, prompt, previousAssistantState)) return;
 
   // Fallback to the explicit send button if Enter did not submit.
   await page.waitForFunction((selectors) => selectors.some((selector) => Boolean(document.querySelector(selector))), SELECTORS.sendButton, { timeout: 5_000 }).catch(() => {});
   const sendButtons = page.locator('button.send-button');
   if (await sendButtons.count().catch(() => 0)) {
     await sendButtons.first().click({ force: true }).catch(() => {});
-    await page.waitForTimeout(500);
+    await waitForSubmissionKickoff(page, input, prompt, previousAssistantState);
   }
 }
 
@@ -502,6 +535,17 @@ async function waitForStreamingDone(page, previousAssistantState = { count: 0, t
   // Wait until the newest assistant message stops changing before we read it or start any follow-up work.
   await waitForAssistantTextToStabilize(page, previousAssistantState.text);
   await page.waitForTimeout(1_500);
+}
+
+async function waitForPromptReady(page) {
+  // Before sending a follow-up, wait until the composer is editable again.
+  await page.waitForFunction(() => {
+    const input = document.querySelector('textarea.message-input-textarea, textarea:not(.ime-text-area):not([readonly]), [contenteditable="true"], input[type="text"]');
+    if (!input) return false;
+    const disabled = input.hasAttribute('disabled') || input.getAttribute('aria-disabled') === 'true';
+    const readOnly = input.hasAttribute('readonly') || input.readOnly === true;
+    return !disabled && !readOnly;
+  }, { timeout: 30_000, polling: 500 }).catch(() => {});
 }
 
 async function getLastAssistantText(page) {
@@ -552,6 +596,35 @@ async function waitForAssistantTextToStabilize(page, previousText = '') {
     }
 
     await page.waitForTimeout(750);
+  }
+}
+
+async function waitForSubmissionKickoff(page, input, prompt, previousAssistantState) {
+  // Detect whether the prompt actually started sending before trying the fallback submit path.
+  const expectedPrompt = String(prompt || '').trim();
+
+  try {
+    await page.waitForFunction(({ selectors, previous, expected }) => {
+      const hasBusyNode = Boolean(document.querySelector('[aria-busy="true"], .loading, .streaming, .typing-indicator, [data-testid="stop-generation"]'));
+      const hasStopButton = Array.from(document.querySelectorAll('button')).some((button) => /^(stop|stopp)$/iu.test((button.textContent || '').trim()) || /stop-generation/iu.test(button.getAttribute('data-testid') || ''));
+      const input = document.querySelector('textarea.message-input-textarea, textarea:not(.ime-text-area):not([readonly]), [contenteditable="true"], input[type="text"]');
+      const inputValue = input ? String(input.value || input.innerText || input.textContent || '').trim() : '';
+      const assistantAdvanced = selectors.some((selector) => {
+        const elements = Array.from(document.querySelectorAll(selector));
+        if (!elements.length) return false;
+        const lastText = String(elements.at(-1)?.innerText || '').trim();
+        return elements.length > previous.count || (lastText.length > 0 && lastText !== previous.text);
+      });
+      return hasBusyNode || hasStopButton || assistantAdvanced || (inputValue !== '' && inputValue !== expected);
+    }, {
+      selectors: SELECTORS.assistantOutput,
+      previous: previousAssistantState,
+      expected: expectedPrompt
+    }, { timeout: 2_500, polling: 150 });
+    return true;
+  } catch {
+    const currentValue = await readInputValue(input);
+    return currentValue.trim() !== expectedPrompt;
   }
 }
 
@@ -622,7 +695,7 @@ export function buildConversationFollowUpPrompt(originalRequest, previousRespons
   return [
     `Original request:\n${originalRequest}`,
     '',
-    'Refine your previous answer using one fresh follow-up turn.',
+    'Refine your previous answer using one same-chat follow-up turn.',
     'Keep only the necessary, best-practice-aligned next step or recommendation.',
     'Remove optional extras, duplicate explanation, and low-value suggestions.',
     '',
