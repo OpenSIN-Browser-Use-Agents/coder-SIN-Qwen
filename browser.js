@@ -170,6 +170,8 @@ export function buildPromptPayload(context) {
   if (typeof context === 'string') return context;
 
   const files = Array.isArray(context.files) ? context.files : [];
+  const fileReferences = Array.isArray(context.fileReferences) ? context.fileReferences : [];
+  const references = Array.isArray(context.references) ? context.references : [];
   const rules = Array.isArray(context.rules) ? context.rules : [];
   const scripts = context.package?.scripts?.join(', ') || 'N/A';
   const dependencies = context.package?.dependencies?.join(', ') || 'N/A';
@@ -182,6 +184,8 @@ export function buildPromptPayload(context) {
     `- branch: ${context.repo?.branch || 'N/A'}`,
     `- head: ${context.repo?.head || 'N/A'}`,
     `- dirty: ${Boolean(context.repo?.dirty)}`,
+    `- repo url: ${context.repo?.urls?.web || 'N/A'}`,
+    `- commit url: ${context.repo?.urls?.commit || 'N/A'}`,
     '',
     'Package context:',
     `- name: ${context.package?.name || 'N/A'}`,
@@ -191,6 +195,12 @@ export function buildPromptPayload(context) {
     '',
     'Relevant files:',
     ...files.map((file) => `- ${file}`),
+    '',
+    'Relevant file URLs:',
+    ...fileReferences.map((file) => `- ${file.path}: ${file.url || 'N/A'}`),
+    '',
+    'Reference URLs:',
+    ...references.map((reference) => `- ${reference.label}: ${reference.url} (${reference.reason})`),
     '',
     'Rules:',
     ...rules.map((rule) => `- ${rule}`),

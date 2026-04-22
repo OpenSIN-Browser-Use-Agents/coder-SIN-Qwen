@@ -5,13 +5,29 @@ import { buildConversationFollowUpPrompt, buildPromptPayload, resolveChromeConne
 test('builds prompt payload strings', () => {
   // Objects should become a normal readable operator message instead of a raw JSON blob.
   assert.equal(buildPromptPayload('hello'), 'hello');
-  assert.match(buildPromptPayload({
+  const payload = buildPromptPayload({
     prompt: 'Check the repo',
-    repo: { cwd: '/tmp/project', remote: 'origin', branch: 'main', head: 'abc123', dirty: false },
+    repo: {
+      cwd: '/tmp/project',
+      remote: 'origin',
+      branch: 'main',
+      head: 'abc123',
+      dirty: false,
+      urls: {
+        web: 'https://github.com/example/repo',
+        commit: 'https://github.com/example/repo/commit/abc123'
+      }
+    },
     package: { name: 'demo', version: '1.0.0', scripts: ['test'], dependencies: ['playwright'] },
     files: ['index.js'],
+    fileReferences: [{ path: 'index.js', url: 'https://github.com/example/repo/blob/abc123/index.js' }],
+    references: [{ label: 'Playwright docs', url: 'https://playwright.dev/docs/intro', reason: 'Browser automation docs' }],
     rules: ['Return production-ready output only.']
-  }), /Task:\nCheck the repo/);
+  });
+  assert.match(payload, /Task:\nCheck the repo/);
+  assert.match(payload, /repo url: https:\/\/github.com\/example\/repo/);
+  assert.match(payload, /Relevant file URLs:/);
+  assert.match(payload, /Playwright docs: https:\/\/playwright.dev\/docs\/intro/);
 });
 
 test('retries flaky actions', async () => {

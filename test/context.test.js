@@ -13,4 +13,10 @@ test('attaches repo context for coding prompts', async () => {
   assert.equal(context.prompt, 'Review the repo and fix the failing build.');
   assert.ok(Array.isArray(context.files));
   assert.ok(context.files.length > 0);
+  assert.ok(context.repo.urls.web.includes('github.com'));
+  assert.ok(Array.isArray(context.fileReferences));
+  assert.ok(context.fileReferences.length > 0);
+  assert.ok(context.fileReferences.some((file) => file.url.includes('/blob/')));
+  assert.ok(Array.isArray(context.references));
+  assert.ok(context.references.some((reference) => reference.url.includes('playwright.dev')));
 });
