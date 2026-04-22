@@ -4,6 +4,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
 import { registerLifecycleResource, unregisterLifecycleResource } from './lifecycle.js';
+import { getScopedEnv } from './runtime-config.js';
 
 const QWEN_URL = 'https://chat.qwen.ai';
 // Centralized selector map so UI changes stay localized.
@@ -720,7 +721,7 @@ function extractStatus(text) {
 
 async function captureScreenshot(page, name) {
   // Store screenshots in a configurable artifacts directory so CI or humans can inspect them later.
-  const dir = process.env.SIN_OMO_QWEN_ARTIFACT_DIR || 'artifacts';
+  const dir = getScopedEnv('ARTIFACT_DIR', 'artifacts');
   const filePath = path.join(dir, `${name}-${Date.now()}.png`);
   fs.mkdirSync(dir, { recursive: true });
   await page.screenshot({ path: filePath, fullPage: true }).catch(() => {});
@@ -729,7 +730,7 @@ async function captureScreenshot(page, name) {
 
 async function writeArtifactJson(name, payload) {
   // Store machine-readable diagnostics next to screenshots for post-mortem analysis.
-  const dir = process.env.SIN_OMO_QWEN_ARTIFACT_DIR || 'artifacts';
+  const dir = getScopedEnv('ARTIFACT_DIR', 'artifacts');
   const filePath = path.join(dir, `${name}-${Date.now()}.json`);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');

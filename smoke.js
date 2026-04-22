@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig, runBrowserE2ECheck } from './browser.js';
 import { writeLogEntry } from './logger.js';
+import { getScopedEnv } from './runtime-config.js';
 
-export async function runSmokeCheck({ live = process.env.SIN_OMO_QWEN_SMOKE_LIVE === '1' } = {}) {
+export async function runSmokeCheck({ live = getScopedEnv('SMOKE_LIVE', '0') === '1' } = {}) {
   // Start with cheap checks, then optionally escalate to a live browser proof.
   const launchConfig = resolveChromeConnectionConfig();
   const profilePath = launchConfig.profilePath;

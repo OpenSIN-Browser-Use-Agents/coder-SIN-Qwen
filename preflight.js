@@ -6,13 +6,14 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
+import { getScopedEnv } from './runtime-config.js';
 
 const execFileAsync = promisify(execFile);
 
 export async function runPreflight() {
   const launchConfig = resolveChromeConnectionConfig();
   const nodeMajor = Number(process.versions.node.split('.')[0] || 0);
-  const requireProfile = process.env.SIN_OMO_QWEN_REQUIRE_PROFILE === '1' || (!process.env.CI && !process.env.SIN_OMO_QWEN_DRY_RUN);
+  const requireProfile = getScopedEnv('REQUIRE_PROFILE', '0') === '1' || (!process.env.CI && getScopedEnv('DRY_RUN', '0') !== '1');
   const lockState = detectChromeProfileLock(launchConfig);
   const checks = {
     node: { ok: nodeMajor >= 20, version: process.versions.node },

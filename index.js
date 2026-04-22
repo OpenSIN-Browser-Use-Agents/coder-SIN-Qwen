@@ -11,6 +11,7 @@ import { restoreLatestSnapshot, restoreSnapshot } from './restore.js';
 import { runPreflight } from './preflight.js';
 import { validateConsultResponse } from './validator.js';
 import { attachLifecycleHooks } from './lifecycle.js';
+import { getScopedEnv } from './runtime-config.js';
 
 async function main() {
   attachLifecycleHooks();
@@ -68,9 +69,9 @@ async function main() {
 
   const baseContext = await buildContext({ prompt: input });
   const { context, consultMeta } = await hydrateConsultContext(baseContext, input);
-  const dryRun = dryRunFlag || process.env.SIN_OMO_QWEN_DRY_RUN === '1';
+  const dryRun = dryRunFlag || getScopedEnv('DRY_RUN', '0') === '1';
   const logFile = resolveLogFile();
-  const sessionTimeoutMs = Number(process.env.SIN_OMO_QWEN_SESSION_TIMEOUT_MS || 180_000);
+  const sessionTimeoutMs = Number(getScopedEnv('SESSION_TIMEOUT_MS', '180000'));
 
   // Persist lightweight structured logs so runs can be audited later.
   writeLogEntry({
