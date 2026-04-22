@@ -1,14 +1,14 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildContext } from './context.js';
 import { runQwenSession } from './browser.js';
 import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
 import { parseQwenResponse } from './parser.js';
 import { validateConsultResponse } from './validator.js';
-import { getScopedEnv, resolveScopedFile } from './runtime-config.js';
+import { getScopedEnv } from './runtime-config.js';
 
 const DEFAULT_AUTOTRAINING_FILE = '.coder-sin-qwen-autotraining.jsonl';
-const LEGACY_AUTOTRAINING_FILE = '.omo-sin-qwen-autotraining.jsonl';
 
 export async function runAutotrainingCycle({ prompt, maxTurns = 1, sessionTimeoutMs = Number(getScopedEnv('SESSION_TIMEOUT_MS', '180000')) }) {
   // Qwen-first autotraining flow: consult, validate, snapshot, suggest, persist.
@@ -110,7 +110,7 @@ export async function persistAutotrainingArtifacts({ snapshot, suggestions }) {
 }
 
 export function resolveAutotrainingFile() {
-  return resolveScopedFile({ suffix: 'AUTOTRAINING_FILE', preferredDefault: DEFAULT_AUTOTRAINING_FILE, legacyDefault: LEGACY_AUTOTRAINING_FILE });
+  return getScopedEnv('AUTOTRAINING_FILE', path.join(process.cwd(), DEFAULT_AUTOTRAINING_FILE));
 }
 
 function estimateTokens(text) {

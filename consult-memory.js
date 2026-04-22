@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { APP_NAME, resolveScopedFile } from './runtime-config.js';
+import { APP_NAME, getScopedEnv } from './runtime-config.js';
 
 const DEFAULT_MEMORY_FILE = '.coder-sin-qwen-memory.json';
-const LEGACY_MEMORY_FILE = '.omo-sin-qwen-memory.json';
 const CONTEXT_REUSE_WINDOW_MS = 1000 * 60 * 60 * 24;
 
 export async function hydrateConsultContext(baseContext, prompt) {
@@ -99,7 +99,7 @@ export async function persistConsultMemory({ consultMeta, context, prompt, reply
 }
 
 export function resolveMemoryFile() {
-  return resolveScopedFile({ suffix: 'MEMORY_FILE', preferredDefault: DEFAULT_MEMORY_FILE, legacyDefault: LEGACY_MEMORY_FILE });
+  return getScopedEnv('MEMORY_FILE', path.join(process.cwd(), DEFAULT_MEMORY_FILE));
 }
 
 export function buildStateSnapshot(context, meta) {
