@@ -196,10 +196,11 @@ The wrapper has been verified end-to-end against Qwen in attach mode; it now sen
 
 Extra Qwen turns are now opt-in only. Use `--turns 2` or higher when you explicitly want a same-chat follow-up.
 
-Current tracked follow-ups:
+Resolved milestones:
 
 - #1 Stabilize `ask-qwen` wrapper execution
 - #2 Support real multi-turn Qwen conversations
+- #3 Keep Max Preview pinned after each turn
 
 ## Handoff
 
