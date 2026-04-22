@@ -20,7 +20,7 @@
 
 ## 0.1.0
 
-- Initial standalone `coder-SIN-Qwen` repo scaffold (previously `omo-SIN-Qwen`)
+- Initial standalone `coder-SIN-Qwen` repo scaffold
 - UI-only Chrome Default-profile browser relay
 - Git snapshot support
 - `.qwenignore` filtering

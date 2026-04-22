@@ -177,17 +177,17 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 - `CHROME_PROFILE_DIRECTORY` — explicit Chrome profile name when `CHROME_PROFILE` points at the user-data root
 - `CHROME_CDP_URL` — attach to an already-running Chrome debug endpoint
 - `CHROME_REMOTE_DEBUGGING_PORT` — shorthand for a local CDP endpoint
-- `SIN_CODER_QWEN_DRY_RUN=1` — skip browser automation and print payload only (legacy `SIN_OMO_QWEN_DRY_RUN` still works)
+- `SIN_CODER_QWEN_DRY_RUN=1` — skip browser automation and print payload only
 - `--json` — print the parsed machine-readable payload instead of raw Qwen text
-- `SIN_CODER_QWEN_LOG_FILE` — JSONL log destination (legacy `SIN_OMO_QWEN_LOG_FILE` still works)
-- `SIN_CODER_QWEN_ARTIFACT_DIR` — screenshot output directory (legacy `SIN_OMO_QWEN_ARTIFACT_DIR` still works)
-- `SIN_CODER_QWEN_MEMORY_FILE` — persistent consult memory file (defaults to `.coder-sin-qwen-memory.json`; legacy var still works)
-- `SIN_CODER_QWEN_AUTOTRAINING_FILE` — JSONL file for autotraining snapshots/suggestions (legacy var still works)
+- `SIN_CODER_QWEN_LOG_FILE` — JSONL log destination
+- `SIN_CODER_QWEN_ARTIFACT_DIR` — screenshot output directory
+- `SIN_CODER_QWEN_MEMORY_FILE` — persistent consult memory file (defaults to `.coder-sin-qwen-memory.json`)
+- `SIN_CODER_QWEN_AUTOTRAINING_FILE` — JSONL file for autotraining snapshots/suggestions
 - `INFISICAL_ENV_NAME` — Infisical environment slug for sync commands
 - `INFISICAL_SECRET_PATH` — Infisical folder path for sync commands
 - `INFISICAL_PROJECT_ID` — Infisical project id for non-interactive pull/push flows
-- `SIN_CODER_QWEN_SMOKE_LIVE=1` — run a real browser smoke proof (legacy `SIN_OMO_QWEN_SMOKE_LIVE` still works)
-- `SIN_CODER_QWEN_REQUIRE_PROFILE=1` — force preflight to fail when the Chrome profile is missing (legacy `SIN_OMO_QWEN_REQUIRE_PROFILE` still works)
+- `SIN_CODER_QWEN_SMOKE_LIVE=1` — run a real browser smoke proof
+- `SIN_CODER_QWEN_REQUIRE_PROFILE=1` — force preflight to fail when the Chrome profile is missing
 - `.qwenignore` — preferred token-saving context filter
 - `--snapshot` — create a Git snapshot before the Qwen run
 
@@ -249,7 +249,7 @@ node ./index.js --turns 1 "your prompt"
 
 ## Artifacts
 
-Live smoke checks and browser failures can write screenshots to `artifacts/` (or `SIN_CODER_QWEN_ARTIFACT_DIR`, with legacy alias support).
+Live smoke checks and browser failures can write screenshots to `artifacts/` (or `SIN_CODER_QWEN_ARTIFACT_DIR`).
 
 ## Secrets
 

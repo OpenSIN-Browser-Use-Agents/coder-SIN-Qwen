@@ -48,10 +48,10 @@
 - After each completed turn the relay re-asserts `Qwen3.6-Max-Preview` to keep the active chat visually pinned to the intended model.
 - Extra Qwen turns are opt-in only via `--turns 2+` and now stay in the same chat.
 - Repo-aware prompts now include repository URLs, relevant file URLs, and curated official reference URLs for the detected stack.
-- Repo-aware consults now persist `context_id`, `message_id`, and the latest compact summary in `.coder-sin-qwen-memory.json` (or `SIN_CODER_QWEN_MEMORY_FILE`, with legacy alias support).
+- Repo-aware consults now persist `context_id`, `message_id`, and the latest compact summary in `.coder-sin-qwen-memory.json` (or `SIN_CODER_QWEN_MEMORY_FILE`).
 - The consult memory now follows a canonical `state_snapshot` envelope (`protocolVersion`, `metadata`, `mandate`, `stateSnapshot`, `decisionHistory`, `constraints`, `completionCriteria`).
 - Repo-aware replies now flow through `validator.js`, which produces a deterministic review object (`pass`, `score`, `violations`, `retry_action`) before stdout/log persistence.
-- `modul-qwen-autotraining.js` now builds snapshot/suggestion artifacts for Qwen-guided self-improvement and persists them to `.coder-sin-qwen-autotraining.jsonl` (or `SIN_CODER_QWEN_AUTOTRAINING_FILE`, with legacy alias support).
+- `modul-qwen-autotraining.js` now builds snapshot/suggestion artifacts for Qwen-guided self-improvement and persists them to `.coder-sin-qwen-autotraining.jsonl` (or `SIN_CODER_QWEN_AUTOTRAINING_FILE`).
 - `lifecycle.js` now owns bounded graceful cleanup for registered resources such as browser sessions and CLI signal handling.
 - The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.
 - Resolved milestones: `#1 Stabilize ask-qwen wrapper execution`, `#2 Support real multi-turn Qwen conversations`, `#3 Keep Max Preview pinned after each turn`.
