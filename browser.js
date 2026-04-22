@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
+import { registerLifecycleResource, unregisterLifecycleResource } from './lifecycle.js';
 
 const QWEN_URL = 'https://chat.qwen.ai';
 // Centralized selector map so UI changes stay localized.
@@ -367,10 +368,15 @@ async function openChromeSession(launchConfig, options) {
     }
 
     const page = await getAttachPage(context);
+    const resourceId = `browser:${Date.now()}:attach`;
+    registerLifecycleResource(resourceId, async () => {
+      await browser.close().catch(() => {});
+    });
     return {
       page,
       close: async () => {
         // In CDP attach mode, Playwright closes only its own connection and leaves the operator's Chrome running.
+        unregisterLifecycleResource(resourceId);
         await browser.close().catch(() => {});
       }
     };
@@ -378,9 +384,14 @@ async function openChromeSession(launchConfig, options) {
 
   const context = await launchChromeContext(launchConfig, options);
   const page = context.pages()[0] ?? await context.newPage();
+  const resourceId = `browser:${Date.now()}:launch`;
+  registerLifecycleResource(resourceId, async () => {
+    await context.close().catch(() => {});
+  });
   return {
     page,
     close: async () => {
+      unregisterLifecycleResource(resourceId);
       await context.close();
     }
   };

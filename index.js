@@ -10,8 +10,10 @@ import { writeLogEntry, resolveLogFile } from './logger.js';
 import { restoreLatestSnapshot, restoreSnapshot } from './restore.js';
 import { runPreflight } from './preflight.js';
 import { validateConsultResponse } from './validator.js';
+import { attachLifecycleHooks } from './lifecycle.js';
 
 async function main() {
+  attachLifecycleHooks();
   const argv = process.argv.slice(2);
   const jsonFlag = argv.includes('--json');
   const snapshotEnabled = argv.includes('--snapshot');

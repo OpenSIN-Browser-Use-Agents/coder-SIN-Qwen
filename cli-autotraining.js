@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { runAutotrainingCycle } from './modul-qwen-autotraining.js';
+import { attachLifecycleHooks } from './lifecycle.js';
+
+attachLifecycleHooks();
 
 const argv = process.argv.slice(2);
 const jsonFlag = argv.includes('--json');
