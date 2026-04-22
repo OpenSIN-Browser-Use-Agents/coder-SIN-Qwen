@@ -42,3 +42,5 @@
 - The browser selectors are intentionally conservative and may need updates when Qwen UI changes.
 - Attach mode now prefers reusing an existing blank tab and leaves the attached tab open.
 - Non-interactive Infisical sync now expects `INFISICAL_PROJECT_ID` when the repo is not linked with `infisical init`.
+- Prompt delivery is now human-style text instead of a forced JSON-status instruction.
+- The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.

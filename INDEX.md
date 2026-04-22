@@ -12,6 +12,7 @@
 - `ignore-filter.js` — `.qwenignore` / `.gitignore` filtering
 - `git.js` — snapshot helper
 - `parser.js` — response parser
+- prompt delivery is human-style text, while the parser still prefers final assistant JSON over echoed prompt/context JSON
 - `preflight.js` — dependency and env checks
 - `secrets-check.js` — secret presence checks
 - `SECRETS.md` — Infisical and env checklist

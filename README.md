@@ -175,6 +175,8 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 Run `/ask-qwen` from OpenCode after placing `./.opencode/commands/ask-qwen.sh` in the repo.
 See `INSTALL.md` for the full setup.
 
+The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message and the parser can still recover the final assistant JSON when Qwen chooses to answer that way.
+
 ## Handoff
 
 See `HANDOFF.md` for the compact operating notes for future agents.

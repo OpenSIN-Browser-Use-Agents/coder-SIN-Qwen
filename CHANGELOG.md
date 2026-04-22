@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- fixed Qwen send-button detection for the current web UI
+- reduced context noise by excluding sidecar/artifact directories from `.qwenignore`
+- taught the parser to prefer the final assistant JSON over echoed prompt JSON
+- removed the forced `End with {"status":"draft"|"final"}` suffix so Qwen receives a normal message
+
 ## 0.1.0
 
 - Initial standalone `omo-SIN-Qwen` repo scaffold

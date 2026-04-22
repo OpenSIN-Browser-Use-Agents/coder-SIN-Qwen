@@ -62,6 +62,8 @@ Then run:
 /ask-qwen build a feature
 ```
 
+The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and can still recover the final assistant JSON when the page contains both prompt context and a JSON answer.
+
 ## 5. Optional flags
 
 - `--dry-run`
