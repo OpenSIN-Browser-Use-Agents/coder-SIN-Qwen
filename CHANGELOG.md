@@ -12,6 +12,7 @@
 - replace the local shell wrapper with repo-local OpenCode command templates in `.opencode/opencode.json`
 - re-assert `Qwen3.6-Max-Preview` after each completed turn so the chat does not drift back to Plus
 - include repository URLs, relevant file URLs, and curated official reference URLs in repo-aware Qwen prompts
+- add persistent consult memory with `context_id`, `message_id`, and compact summaries for repo-aware sessions
 
 ## 0.1.0
 
