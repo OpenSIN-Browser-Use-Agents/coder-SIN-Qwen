@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Main CLI entrypoint for the standalone Qwen relay agent.
 import { buildContext } from './context.js';
-import { buildConversationFollowUpPrompt, runQwenSession, shouldContinueConversation } from './browser.js';
+import { runQwenSession } from './browser.js';
+import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
 import { parseQwenResponse } from './parser.js';
 import { createSnapshot } from './git.js';
 import { runSmokeCheck } from './smoke.js';
@@ -62,22 +63,40 @@ async function main() {
     return;
   }
 
-  const context = await buildContext({ prompt: input });
+  const baseContext = await buildContext({ prompt: input });
+  const { context, consultMeta } = await hydrateConsultContext(baseContext, input);
   const dryRun = dryRunFlag || process.env.SIN_OMO_QWEN_DRY_RUN === '1';
   const logFile = resolveLogFile();
   const sessionTimeoutMs = Number(process.env.SIN_OMO_QWEN_SESSION_TIMEOUT_MS || 180_000);
 
   // Persist lightweight structured logs so runs can be audited later.
-  writeLogEntry({ event: 'start', prompt: input, dryRun, snapshotEnabled, maxTurns, outputMode: jsonFlag ? 'json' : 'text' }, logFile).catch(() => {});
+  writeLogEntry({
+    event: 'start',
+    prompt: input,
+    dryRun,
+    snapshotEnabled,
+    maxTurns,
+    outputMode: jsonFlag ? 'json' : 'text',
+    contextId: consultMeta?.contextId || '',
+    messageId: consultMeta?.messageId || '',
+    previousMessageId: consultMeta?.previousMessageId || ''
+  }, logFile).catch(() => {});
 
   if (dryRun) {
     await writeStdout(`${JSON.stringify(context, null, 2)}\n`);
-    writeLogEntry({ event: 'dry-run', prompt: input, files: context.files.length }, logFile).catch(() => {});
+    writeLogEntry({
+      event: 'dry-run',
+      prompt: input,
+      files: context.files?.length || 0,
+      contextId: consultMeta?.contextId || '',
+      messageId: consultMeta?.messageId || ''
+    }, logFile).catch(() => {});
     return;
   }
 
   const reply = await runControlledConversation(context, input, maxTurns, sessionTimeoutMs);
   const parsed = parseQwenResponse(reply);
+  await persistConsultMemory({ consultMeta, context, prompt: input, reply, parsed });
 
   if (jsonFlag) {
     await writeStdout(`${JSON.stringify(parsed, null, 2)}\n`);
@@ -85,7 +104,16 @@ async function main() {
     await writeStdout(`${reply.trim()}\n`);
   }
 
-  writeLogEntry({ event: 'finish', prompt: input, status: parsed.plan, actions: parsed.actions?.length || 0, outputMode: jsonFlag ? 'json' : 'text' }, logFile).catch(() => {});
+  writeLogEntry({
+    event: 'finish',
+    prompt: input,
+    status: parsed.plan,
+    actions: parsed.actions?.length || 0,
+    outputMode: jsonFlag ? 'json' : 'text',
+    contextId: consultMeta?.contextId || '',
+    messageId: consultMeta?.messageId || '',
+    previousMessageId: consultMeta?.previousMessageId || ''
+  }, logFile).catch(() => {});
 }
 
 main().then(() => {

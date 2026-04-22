@@ -9,3 +9,4 @@ coverage
 artifacts/
 .env.local
 .chrome-cdp-sidecar*/
+.omo-sin-qwen-memory.json
