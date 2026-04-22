@@ -10,6 +10,7 @@ It does not “think” for you. It:
 4. returns the plain Qwen answer by default.
 
 If you explicitly need machine-readable output, use `--json` so the repo prints the parsed payload instead.
+For richer Qwen back-and-forth, the relay can take one short follow-up turn when the answer clearly suggests a useful next step.
 
 ## Files
 
@@ -188,7 +189,7 @@ OpenCode can also expose `omo-SIN-Qwen` as a selectable agent. That agent is mea
 
 The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
 
-The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
+The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, can take one useful follow-up turn when needed, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
 
 ## Handoff
 

@@ -8,6 +8,7 @@
 - removed the forced `End with {"status":"draft"|"final"}` suffix so Qwen receives a normal message
 - switched the default CLI output to raw Qwen text and added explicit `--json` mode
 - auto-select `Qwen3.6-Max-Preview` before sending live prompts
+- allow one short conversational follow-up when the answer clearly suggests a useful next step
 
 ## 0.1.0
 

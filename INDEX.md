@@ -14,6 +14,7 @@
 - `parser.js` — response parser
 - prompt delivery is human-style text, raw text is the default output, and the parser still prefers final assistant JSON over echoed prompt/context JSON
 - live chat auto-selects `Qwen3.6-Max-Preview` before sending the prompt
+- one useful follow-up turn can happen when Qwen's answer clearly suggests it
 - `preflight.js` — dependency and env checks
 - `secrets-check.js` — secret presence checks
 - `SECRETS.md` — Infisical and env checklist

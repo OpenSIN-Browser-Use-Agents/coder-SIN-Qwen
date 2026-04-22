@@ -66,7 +66,7 @@ If your OpenCode global config contains the `omo-SIN-Qwen` agent entry, you can 
 
 The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
 
-The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and returns the raw Qwen reply by default.
+The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message, can take one useful follow-up turn when needed, and returns the raw Qwen reply by default.
 
 If you need parsed machine-readable output instead:
 
