@@ -45,7 +45,7 @@ export async function hydrateConsultContext(baseContext, prompt) {
   };
 }
 
-export async function persistConsultMemory({ consultMeta, context, prompt, reply, parsed }) {
+export async function persistConsultMemory({ consultMeta, context, prompt, reply, parsed, review }) {
   if (!consultMeta || typeof context === 'string') return;
 
   const memory = await readMemoryFile(consultMeta.memoryFile);
@@ -65,6 +65,7 @@ export async function persistConsultMemory({ consultMeta, context, prompt, reply
     latestSummary: summary,
     latestStatus: parsed?.payload?.status || '',
     latestDecision: decisionEntry,
+    latestReview: review || null,
     constraints: context.constraints || [],
     completionCriteria: context.completionCriteria || [],
     references: (context.references || []).slice(0, 6),

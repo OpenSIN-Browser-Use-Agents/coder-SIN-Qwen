@@ -9,6 +9,7 @@ import { runSmokeCheck } from './smoke.js';
 import { writeLogEntry, resolveLogFile } from './logger.js';
 import { restoreLatestSnapshot, restoreSnapshot } from './restore.js';
 import { runPreflight } from './preflight.js';
+import { validateConsultResponse } from './validator.js';
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -96,12 +97,15 @@ async function main() {
 
   const reply = await runControlledConversation(context, input, maxTurns, sessionTimeoutMs);
   const parsed = parseQwenResponse(reply);
-  await persistConsultMemory({ consultMeta, context, prompt: input, reply, parsed });
+  const review = validateConsultResponse({ reply, parsed, context });
+  parsed.review = review;
+  await persistConsultMemory({ consultMeta, context, prompt: input, reply, parsed, review });
 
   if (jsonFlag) {
     await writeStdout(`${JSON.stringify(parsed, null, 2)}\n`);
   } else {
-    await writeStdout(`${reply.trim()}\n`);
+    const textOutput = review.retry_action === 'strip_fluff' ? review.cleaned_text : reply.trim();
+    await writeStdout(`${textOutput}\n`);
   }
 
   writeLogEntry({
@@ -109,6 +113,8 @@ async function main() {
     prompt: input,
     status: parsed.plan,
     actions: parsed.actions?.length || 0,
+    reviewAction: review.retry_action,
+    reviewPass: review.pass,
     outputMode: jsonFlag ? 'json' : 'text',
     contextId: consultMeta?.contextId || '',
     messageId: consultMeta?.messageId || '',
