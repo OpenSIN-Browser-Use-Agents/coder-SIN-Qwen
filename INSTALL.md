@@ -68,6 +68,7 @@ The repo-local `/ask-qwen` and `/ask-qwen-json` entries call `node ./index.js` d
 If your global OpenCode config also contains those commands, both paths use the same direct CLI strategy.
 
 The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
+After each completed turn it will also re-assert `Qwen3.6-Max-Preview` so the same chat does not visually drift back to Plus.
 
 The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and returns the raw Qwen reply by default.
 

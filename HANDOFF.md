@@ -45,6 +45,7 @@
 - Prompt delivery is now human-style text instead of a forced JSON-status instruction.
 - Raw Qwen text is now the default CLI output; use `--json` only when machine-readable parsing is needed.
 - The live browser flow now auto-selects `Qwen3.6-Max-Preview` before the first prompt.
+- After each completed turn the relay re-asserts `Qwen3.6-Max-Preview` to keep the active chat visually pinned to the intended model.
 - Extra Qwen turns are opt-in only via `--turns 2+` and now stay in the same chat.
 - The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.
 - Open tracking issues: `#1 Stabilize ask-qwen wrapper execution`, `#2 Support real multi-turn Qwen conversations`.

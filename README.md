@@ -190,6 +190,7 @@ The global OpenCode config can also expose `/ask-qwen` and `/ask-qwen-json` comm
 OpenCode can also expose `omo-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
 
 The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
+It also re-asserts `Qwen3.6-Max-Preview` after each completed turn so the active chat stays pinned to the intended model.
 
 The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
 
