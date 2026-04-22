@@ -71,7 +71,7 @@ The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending promp
 
 The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and returns the raw Qwen reply by default.
 
-If you explicitly want an extra fresh consult, opt in with:
+If you explicitly want an extra same-chat follow-up, opt in with:
 
 ```bash
 node ./index.js --turns 2 "build a feature"

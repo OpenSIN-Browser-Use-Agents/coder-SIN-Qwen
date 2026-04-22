@@ -193,7 +193,7 @@ The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
 
 The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
 
-Extra Qwen turns are now opt-in only. Use `--turns 2` or higher when you explicitly want a second fresh consult.
+Extra Qwen turns are now opt-in only. Use `--turns 2` or higher when you explicitly want a same-chat follow-up.
 
 Current tracked follow-ups:
 

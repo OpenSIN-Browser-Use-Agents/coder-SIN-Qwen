@@ -45,7 +45,7 @@
 - Prompt delivery is now human-style text instead of a forced JSON-status instruction.
 - Raw Qwen text is now the default CLI output; use `--json` only when machine-readable parsing is needed.
 - The live browser flow now auto-selects `Qwen3.6-Max-Preview` before the first prompt.
-- Extra Qwen turns are opt-in only via `--turns 2+` and each turn uses a fresh consult.
+- Extra Qwen turns are opt-in only via `--turns 2+` and now stay in the same chat.
 - The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.
 - Open tracking issues: `#1 Stabilize ask-qwen wrapper execution`, `#2 Support real multi-turn Qwen conversations`.
 - The repo-local OpenCode config now defines `/ask-qwen`, `/ask-qwen-json`, and the `omo-SIN-Qwen` agent directly in `.opencode/opencode.json` so the shell wrapper is no longer required.
