@@ -22,12 +22,23 @@ test('builds prompt payload strings', () => {
     files: ['index.js'],
     fileReferences: [{ path: 'index.js', url: 'https://github.com/example/repo/blob/abc123/index.js' }],
     references: [{ label: 'Playwright docs', url: 'https://playwright.dev/docs/intro', reason: 'Browser automation docs' }],
+    stateSnapshot: {
+      contextId: 'ctx-1',
+      messageId: 'msg-1',
+      previousMessageId: 'msg-0',
+      previousSummary: 'Previous summary here.'
+    },
+    constraints: ['Use the provided URLs.'],
+    completionCriteria: ['Return production-ready output only.'],
     rules: ['Return production-ready output only.']
   });
   assert.match(payload, /Task:\nCheck the repo/);
   assert.match(payload, /repo url: https:\/\/github.com\/example\/repo/);
+  assert.match(payload, /Persistent consult state:/);
+  assert.match(payload, /context id: ctx-1/);
   assert.match(payload, /Relevant file URLs:/);
   assert.match(payload, /Playwright docs: https:\/\/playwright.dev\/docs\/intro/);
+  assert.match(payload, /Completion criteria:/);
 });
 
 test('retries flaky actions', async () => {

@@ -172,6 +172,9 @@ export function buildPromptPayload(context) {
   const files = Array.isArray(context.files) ? context.files : [];
   const fileReferences = Array.isArray(context.fileReferences) ? context.fileReferences : [];
   const references = Array.isArray(context.references) ? context.references : [];
+  const stateSnapshot = context.stateSnapshot || null;
+  const constraints = Array.isArray(context.constraints) ? context.constraints : [];
+  const completionCriteria = Array.isArray(context.completionCriteria) ? context.completionCriteria : [];
   const rules = Array.isArray(context.rules) ? context.rules : [];
   const scripts = context.package?.scripts?.join(', ') || 'N/A';
   const dependencies = context.package?.dependencies?.join(', ') || 'N/A';
@@ -187,6 +190,12 @@ export function buildPromptPayload(context) {
     `- repo url: ${context.repo?.urls?.web || 'N/A'}`,
     `- commit url: ${context.repo?.urls?.commit || 'N/A'}`,
     '',
+    'Persistent consult state:',
+    `- context id: ${stateSnapshot?.contextId || 'N/A'}`,
+    `- message id: ${stateSnapshot?.messageId || 'N/A'}`,
+    `- previous message id: ${stateSnapshot?.previousMessageId || 'N/A'}`,
+    `- previous summary: ${stateSnapshot?.previousSummary || 'N/A'}`,
+    '',
     'Package context:',
     `- name: ${context.package?.name || 'N/A'}`,
     `- version: ${context.package?.version || 'N/A'}`,
@@ -201,6 +210,12 @@ export function buildPromptPayload(context) {
     '',
     'Reference URLs:',
     ...references.map((reference) => `- ${reference.label}: ${reference.url} (${reference.reason})`),
+    '',
+    'Constraints:',
+    ...constraints.map((constraint) => `- ${constraint}`),
+    '',
+    'Completion criteria:',
+    ...completionCriteria.map((criterion) => `- ${criterion}`),
     '',
     'Rules:',
     ...rules.map((rule) => `- ${rule}`),

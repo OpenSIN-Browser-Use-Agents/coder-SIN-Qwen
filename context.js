@@ -34,6 +34,14 @@ export async function buildContext({ prompt }) {
     files: filteredFiles,
     fileReferences,
     references,
+    constraints: [
+      'Use the provided repo and file URLs when code context matters.',
+      'Prefer official references over guessed behavior.'
+    ],
+    completionCriteria: [
+      'Keep the recommendation aligned with the current repo state.',
+      'Return production-ready output only.'
+    ],
     rules: [
       'SIN-Qwen is a relay proxy, not a thinking agent.',
       'Return production-ready output only.',
