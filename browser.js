@@ -7,9 +7,9 @@ import { chromium } from 'playwright';
 const QWEN_URL = 'https://chat.qwen.ai';
 // Centralized selector map so UI changes stay localized.
 export const SELECTORS = {
-  newChat: ['button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', '[data-testid="new-chat"]'],
+  newChat: ['.sidebar-entry-fixed-list-content', '.sidebar-entry-fixed-list-text', 'button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', 'text=Neue Unterhaltung', '[data-testid="new-chat"]'],
   modelMenu: ['header span.ant-dropdown-trigger', 'header .index-module__model-selector-text___XvWe0', 'span.ant-dropdown-trigger', 'button:has-text("Model")', 'button:has-text("Modell")', '[data-testid="model-selector"]'],
-  promptInput: ['textarea', '[contenteditable="true"]', 'input[type="text"]', 'textarea[aria-label*="message" i]', 'input[aria-label*="prompt" i]'],
+  promptInput: ['textarea.message-input-textarea', 'textarea:not(.ime-text-area):not([readonly])', '[contenteditable="true"]', 'input[type="text"]', 'textarea[aria-label*="message" i]', 'input[aria-label*="prompt" i]'],
   sendButton: ['.send-button', 'button[type="submit"]', 'button[aria-label*="send" i]', 'button:has-text("Send")', 'button:has-text("Senden")'],
   assistantOutput: ['.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.message-content', '.chat-message .content']
 };
@@ -48,9 +48,10 @@ export async function runQwenSession(input, maxTurns = 5) {
         throw new Error('Qwen prompt input not found in the Chrome Default profile session.');
       }
 
+      const previousAssistantState = await getLastAssistantState(page);
       await enterPrompt(inputBox, currentPrompt);
       await submitPrompt(page, inputBox, currentPrompt);
-      await waitForStreamingDone(page);
+      await waitForStreamingDone(page, previousAssistantState);
 
       const responseText = await getLastAssistantText(page);
       if (!responseText) {
@@ -60,9 +61,16 @@ export async function runQwenSession(input, maxTurns = 5) {
       finalResponse = responseText;
       const status = extractStatus(responseText);
 
-      // Default behavior is conversational: if Qwen gives a normal answer without draft/final metadata,
-      // stop after the current turn instead of nagging it with synthetic follow-up prompts.
-      if (!status) break;
+      // If Qwen gives a normal answer without draft/final metadata, only continue when it looks like
+      // there is still a useful next step to ask about.
+      if (!status) {
+        if (turn < maxTurns && shouldContinueConversation(responseText)) {
+          currentPrompt = buildConversationFollowUpPrompt(responseText);
+          continue;
+        }
+
+        break;
+      }
       if (status === 'final') break;
 
       currentPrompt = status === 'draft'
@@ -326,7 +334,7 @@ async function openChromeSession(launchConfig, options) {
     return {
       page,
       close: async () => {
-        // Disconnect from the borrowed browser session without closing the operator's Chrome window.
+        // In CDP attach mode, Playwright closes only its own connection and leaves the operator's Chrome running.
         await browser.close().catch(() => {});
       }
     };
@@ -387,8 +395,8 @@ async function maybeStartNewChat(page) {
       result.found = true;
       result.selector = selector;
       // Try to start clean; if the UI changed, continue with the current chat instead of failing.
-      await button.click().then(() => { result.clicked = true; }).catch(() => {});
-      await page.waitForTimeout(500);
+      await button.click({ force: true }).then(() => { result.clicked = true; }).catch(() => {});
+      await page.waitForTimeout(1_000);
       return result;
     }
   }
@@ -403,17 +411,26 @@ async function maybeSelectModel(page) {
     if (await button.count().catch(() => 0)) {
       result.menuFound = true;
       result.selector = selector;
-      await button.click().catch(() => {});
-      await page.waitForTimeout(500);
+      await button.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(1_000);
       // Pick the Max Preview entry explicitly so the relay uses the stronger model by default.
       const target = page.locator('div.index-module__model-item___MkLlj').filter({ hasText: 'Qwen3.6-Max-Preview' }).first();
       if (await target.count().catch(() => 0)) {
         result.modelFound = true;
         await target.click({ force: true }).then(() => { result.modelClicked = true; }).catch(() => {});
+        await page.waitForTimeout(1_000);
         await page.waitForFunction(() => {
           const header = document.querySelector('.index-module__model-selector-text___XvWe0');
           return Boolean(header && header.textContent && header.textContent.includes('Qwen3.6-Max-Preview'));
         }, { timeout: 10_000 }).catch(() => {});
+      }
+
+      if (!result.modelClicked) {
+        // Retry once with the visible text node in case the class-based item selector drifted.
+        const textTarget = page.getByText('Qwen3.6-Max-Preview', { exact: true }).last();
+        if (await textTarget.count().catch(() => 0)) {
+          await textTarget.click({ force: true }).then(() => { result.modelClicked = true; }).catch(() => {});
+        }
       }
       return result;
     }
@@ -425,7 +442,14 @@ async function maybeSelectModel(page) {
 async function findPromptInput(page) {
   for (const selector of SELECTORS.promptInput) {
     const locator = page.locator(selector).first();
-    if (await locator.count().catch(() => 0)) return locator;
+    if (await locator.count().catch(() => 0)) {
+      const editable = await locator.evaluate((node) => {
+        const tag = node.tagName.toLowerCase();
+        const className = String(node.className || '');
+        return tag !== 'textarea' || (!className.includes('ime-text-area') && !node.readOnly && !node.hasAttribute('readonly'));
+      }).catch(() => false);
+      if (editable) return locator;
+    }
   }
 
   return null;
@@ -435,7 +459,8 @@ async function enterPrompt(input, prompt) {
   // Support both normal text fields and rich editable areas.
   const isTextField = await input.evaluate((node) => {
     const tag = node.tagName.toLowerCase();
-    return tag === 'textarea' || tag === 'input';
+    const className = String(node.className || '');
+    return (tag === 'textarea' || tag === 'input') && !className.includes('ime-text-area') && !node.readOnly && !node.hasAttribute('readonly');
   });
 
   if (isTextField) {
@@ -465,12 +490,8 @@ async function submitPrompt(page, input, prompt) {
 
   await page.waitForTimeout(700);
 
-  const currentValue = await readInputValue(input);
-  if (!currentValue || currentValue.trim().length === 0 || currentValue.trim() !== String(prompt || '').trim()) {
-    return;
-  }
-
   // Fallback to the explicit send button if Enter did not submit.
+  await page.waitForFunction((selectors) => selectors.some((selector) => Boolean(document.querySelector(selector))), SELECTORS.sendButton, { timeout: 5_000 }).catch(() => {});
   const sendButtons = page.locator('button.send-button');
   if (await sendButtons.count().catch(() => 0)) {
     await sendButtons.first().click({ force: true }).catch(() => {});
@@ -478,15 +499,19 @@ async function submitPrompt(page, input, prompt) {
   }
 }
 
-async function waitForStreamingDone(page) {
-  // Wait for the assistant message to appear before checking whether streaming has finished.
-  await page.waitForFunction((selectors) => {
+async function waitForStreamingDone(page, previousAssistantState = { count: 0, text: '' }) {
+  // Wait for a NEW assistant message before checking whether streaming has finished.
+  await page.waitForFunction(({ selectors, previous }) => {
     return selectors.some((selector) => {
-      return Array.from(document.querySelectorAll(selector)).some((element) => {
-        return (element.innerText || '').trim().length > 0;
-      });
+      const elements = Array.from(document.querySelectorAll(selector));
+      if (!elements.length) return false;
+      const lastText = String(elements.at(-1)?.innerText || '').trim();
+      return elements.length > previous.count || (lastText.length > 0 && lastText !== previous.text);
     });
-  }, SELECTORS.assistantOutput, { timeout: 120_000, polling: 1_000 }).catch(() => {});
+  }, {
+    selectors: SELECTORS.assistantOutput,
+    previous: previousAssistantState
+  }, { timeout: 120_000, polling: 1_000 }).catch(() => {});
 
   await page.waitForTimeout(2_000);
   await page.waitForFunction(() => {
@@ -510,6 +535,19 @@ async function getLastAssistantText(page) {
   }
 
   return page.locator('body').innerText().catch(() => '');
+}
+
+async function getLastAssistantState(page) {
+  for (const selector of SELECTORS.assistantOutput) {
+    const locator = page.locator(selector);
+    const count = await locator.count().catch(() => 0);
+    if (!count) continue;
+
+    const text = await locator.last().innerText().catch(() => '');
+    return { count, text: text.trim() };
+  }
+
+  return { count: 0, text: '' };
 }
 
 async function readInputValue(input) {
@@ -561,4 +599,23 @@ async function writeArtifactJson(name, payload) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   return filePath;
+}
+
+function shouldContinueConversation(text) {
+  const normalized = String(text || '').trim();
+  if (!normalized) return false;
+
+  if (/^[\s>*-]*$/u.test(normalized)) return false;
+  if (/\b(if you want|i can also|next step|consider|could|should|also|further|let me know|suggest|recommend|however|otherwise)\b/iu.test(normalized)) return true;
+  if (/\?/u.test(normalized)) return true;
+  if (/^\s*[-*•]\s+/m.test(normalized)) return true;
+  return false;
+}
+
+function buildConversationFollowUpPrompt(previousResponse) {
+  return [
+    'Continue the same conversation.',
+    'Based on your previous answer, give only the single most important next step.',
+    'Ignore optional extras and keep it short and concrete.'
+  ].join('\n');
 }

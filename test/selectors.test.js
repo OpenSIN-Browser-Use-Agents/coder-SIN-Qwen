@@ -14,4 +14,5 @@ test('Qwen selector map stays populated', () => {
   }
 
   assert.ok(SELECTORS.modelMenu.some((selector) => selector.includes('ant-dropdown-trigger')), 'model menu should include the visible Qwen dropdown trigger');
+  assert.ok(SELECTORS.newChat.some((selector) => selector.includes('sidebar-entry-fixed-list')), 'new chat should include the visible sidebar trigger');
 });

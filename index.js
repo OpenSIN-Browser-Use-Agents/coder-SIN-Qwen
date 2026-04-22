@@ -65,30 +65,58 @@ async function main() {
   const context = await buildContext({ prompt: input });
   const dryRun = dryRunFlag || process.env.SIN_OMO_QWEN_DRY_RUN === '1';
   const logFile = resolveLogFile();
+  const sessionTimeoutMs = Number(process.env.SIN_OMO_QWEN_SESSION_TIMEOUT_MS || 180_000);
 
   // Persist lightweight structured logs so runs can be audited later.
-  await writeLogEntry({ event: 'start', prompt: input, dryRun, snapshotEnabled, maxTurns, outputMode: jsonFlag ? 'json' : 'text' }, logFile);
+  writeLogEntry({ event: 'start', prompt: input, dryRun, snapshotEnabled, maxTurns, outputMode: jsonFlag ? 'json' : 'text' }, logFile).catch(() => {});
 
   if (dryRun) {
-    console.log(JSON.stringify(context, null, 2));
-    await writeLogEntry({ event: 'dry-run', prompt: input, files: context.files.length }, logFile);
+    await writeStdout(`${JSON.stringify(context, null, 2)}\n`);
+    writeLogEntry({ event: 'dry-run', prompt: input, files: context.files.length }, logFile).catch(() => {});
     return;
   }
 
-  const reply = await runQwenSession(context, maxTurns);
+  const reply = await withTimeout(
+    runQwenSession(context, maxTurns),
+    sessionTimeoutMs,
+    `Qwen session timed out after ${sessionTimeoutMs}ms`
+  );
   const parsed = parseQwenResponse(reply);
 
   if (jsonFlag) {
-    process.stdout.write(JSON.stringify(parsed, null, 2) + '\n');
+    await writeStdout(`${JSON.stringify(parsed, null, 2)}\n`);
   } else {
-    process.stdout.write(`${reply.trim()}\n`);
+    await writeStdout(`${reply.trim()}\n`);
   }
 
-  await writeLogEntry({ event: 'finish', prompt: input, status: parsed.plan, actions: parsed.actions?.length || 0, outputMode: jsonFlag ? 'json' : 'text' }, logFile);
+  writeLogEntry({ event: 'finish', prompt: input, status: parsed.plan, actions: parsed.actions?.length || 0, outputMode: jsonFlag ? 'json' : 'text' }, logFile).catch(() => {});
 }
 
-main().catch((error) => {
+main().then(() => {
+  // This CLI is single-shot; force a clean exit so lingering Playwright/CDP handles cannot hang the shell.
+  process.exit(0);
+}).catch((error) => {
   // Keep failure output compact and shell-friendly for OpenCode wrappers.
   console.error(error?.stack || String(error));
   process.exit(1);
 });
+
+function withTimeout(promise, ms, message) {
+  // Fail fast instead of letting browser automation hang forever when the UI stops responding.
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    })
+  ]);
+}
+
+function writeStdout(text) {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(text, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
