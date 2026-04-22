@@ -44,4 +44,4 @@
 
 ## OpenCode
 
-Place `./.opencode/commands/ask-qwen.sh` in this repo and use `/ask-qwen` inside OpenCode.
+Use the repo-local `./.opencode/opencode.json` config for `/ask-qwen`, `/ask-qwen-json`, and the `omo-SIN-Qwen` agent entry.

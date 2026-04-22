@@ -182,10 +182,10 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 
 ## OpenCode
 
-Run `/ask-qwen` from OpenCode after placing `./.opencode/commands/ask-qwen.sh` in the repo.
+Run `/ask-qwen` from OpenCode through the repo-local `./.opencode/opencode.json` command template.
 See `INSTALL.md` for the full setup.
 
-The global OpenCode config can also expose `/ask-qwen` and `/ask-qwen-json` command templates that call `node ./index.js` directly. That path is the preferred workaround if a local shell wrapper behaves inconsistently.
+The global OpenCode config can also expose `/ask-qwen` and `/ask-qwen-json` command templates that call `node ./index.js` directly. The repo-local config now follows that same direct-CLI path instead of relying on a shell wrapper.
 
 OpenCode can also expose `omo-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
 
@@ -217,7 +217,7 @@ See `CHANGELOG.md` for the initial release notes.
 See `OPS.md` for smoke tests, logging, secrets handling, and rollback.
 See `LIVE_RUNBOOK.md` and `MERGE_RUNBOOK.md` for operational execution sequences.
 
-If the OpenCode wrapper still misbehaves in your local shell, use the direct fallback temporarily:
+If slash-command execution still misbehaves in your environment, use the direct fallback temporarily:
 
 ```bash
 node ./index.js --turns 1 "your prompt"

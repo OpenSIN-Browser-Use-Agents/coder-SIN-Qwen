@@ -50,10 +50,10 @@ In attach mode the repo will try to reuse an existing blank tab first and will n
 
 ## 4. Use OpenCode
 
-Copy or keep this file in place:
+Keep the repo-local OpenCode config in place:
 
 ```text
-./.opencode/commands/ask-qwen.sh
+./.opencode/opencode.json
 ```
 
 Then run:
@@ -64,7 +64,8 @@ Then run:
 
 If your OpenCode global config contains the `omo-SIN-Qwen` agent entry, you can also select `omo-SIN-Qwen` directly from the agent picker for Qwen-first execution.
 
-If your global OpenCode config contains the `/ask-qwen` and `/ask-qwen-json` command templates, prefer those over the local shell wrapper because they call `node ./index.js` directly.
+The repo-local `/ask-qwen` and `/ask-qwen-json` entries call `node ./index.js` directly.
+If your global OpenCode config also contains those commands, both paths use the same direct CLI strategy.
 
 The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
 
