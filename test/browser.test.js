@@ -83,6 +83,7 @@ test('detects when a refined follow-up is worth asking', () => {
 test('builds a fresh follow-up prompt from the original request and reply', () => {
   const prompt = buildConversationFollowUpPrompt('Review the repo', 'You should run verify and then clean the working tree.');
   assert.match(prompt, /Original request:\nReview the repo/);
+  assert.match(prompt, /Refine your previous answer using one same-chat follow-up turn\./);
   assert.match(prompt, /Previous answer:/);
   assert.match(prompt, /run verify/);
 });
