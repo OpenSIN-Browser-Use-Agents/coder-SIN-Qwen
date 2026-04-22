@@ -189,7 +189,9 @@ OpenCode can also expose `omo-SIN-Qwen` as a selectable agent. That agent is mea
 
 The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
 
-The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, can take one useful follow-up turn when needed, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
+The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
+
+Extra Qwen turns are now opt-in only. Use `--turns 2` or higher when you explicitly want a second fresh consult.
 
 Current tracked follow-ups:
 
