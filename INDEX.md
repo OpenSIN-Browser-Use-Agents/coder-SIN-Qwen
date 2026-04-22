@@ -31,6 +31,8 @@
 - `verify.js` — install/test/build verification
 - `smoke.js` — local readiness check
 - `logger.js` — JSONL logging helper
+- `modul-qwen-autotraining.js` — Qwen-first self-improvement snapshot/suggestion orchestration
+- `cli-autotraining.js` — autotraining CLI entrypoint
 - `OPS.md` — ops, logging, secrets, rollback
 - `SECURITY.md` — secret handling rules
 - `scripts/merge-main.sh` — guarded GitHub merge helper

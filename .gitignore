@@ -10,3 +10,4 @@ artifacts/
 .env.local
 .chrome-cdp-sidecar*/
 .omo-sin-qwen-memory.json
+.omo-sin-qwen-autotraining.jsonl

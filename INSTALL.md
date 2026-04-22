@@ -83,6 +83,14 @@ If you explicitly want an extra same-chat follow-up, opt in with:
 node ./index.js --turns 2 "build a feature"
 ```
 
+Autotraining helper:
+
+```bash
+node ./cli-autotraining.js "Design the next omo-SIN-Qwen improvement"
+```
+
+Use `--json` if you want the full snapshot + suggestion output.
+
 If you need parsed machine-readable output instead:
 
 ```bash

@@ -19,6 +19,8 @@ For richer Qwen back-and-forth, the relay can take one short follow-up turn when
 - `browser.js` — browser/session adapter
 - `parser.js` — turns model output into structured actions
 - `preflight.js` — dependency and environment gate
+- `modul-qwen-autotraining.js` — Qwen-first self-improvement snapshot/suggestion engine
+- `cli-autotraining.js` — CLI entrypoint for autotraining runs
 - `secrets-check.js` — secret presence validator
 - `push-secrets.js` — Infisical push helper
 - `git.js` — optional snapshot helper
@@ -42,6 +44,12 @@ Machine-readable output:
 
 ```bash
 node ./index.js --json "Review the repo and propose the next implementation step"
+```
+
+Autotraining cycle:
+
+```bash
+node ./cli-autotraining.js "Design the next omo-SIN-Qwen improvement"
 ```
 
 Optional snapshot before run:
@@ -173,6 +181,7 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 - `SIN_OMO_QWEN_LOG_FILE` — JSONL log destination
 - `SIN_OMO_QWEN_ARTIFACT_DIR` — screenshot output directory
 - `SIN_OMO_QWEN_MEMORY_FILE` — persistent consult memory file (defaults to `.omo-sin-qwen-memory.json`)
+- `SIN_OMO_QWEN_AUTOTRAINING_FILE` — JSONL file for autotraining snapshots/suggestions
 - `INFISICAL_ENV_NAME` — Infisical environment slug for sync commands
 - `INFISICAL_SECRET_PATH` — Infisical folder path for sync commands
 - `INFISICAL_PROJECT_ID` — Infisical project id for non-interactive pull/push flows
@@ -205,6 +214,7 @@ For repo-aware prompts, the relay now also includes:
 - persistent consult metadata (`context_id`, `message_id`, previous summary)
 - a canonical `state_snapshot` envelope with protocol version, sender/receiver metadata, decision history, constraints, and completion criteria
 - a validator/critic review pass that scores replies, flags violations, and can strip fluff before returning text output
+- an autotraining module that stores snapshot/suggestion pairs for iterative Qwen-guided self-improvement
 
 Resolved milestones:
 

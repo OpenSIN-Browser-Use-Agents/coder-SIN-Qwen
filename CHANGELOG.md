@@ -15,6 +15,7 @@
 - add persistent consult memory with `context_id`, `message_id`, and compact summaries for repo-aware sessions
 - upgrade consult memory to a canonical `state_snapshot` envelope with decision history and metadata
 - add a deterministic validator/critic pass that scores replies, flags violations, and strips fluff when appropriate
+- add `modul-qwen-autotraining` and `cli-autotraining.js` for Qwen-guided self-improvement snapshots and suggestions
 
 ## 0.1.0
 
