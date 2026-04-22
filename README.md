@@ -7,7 +7,9 @@ It does not “think” for you. It:
 1. collects local project context,
 2. sends it to Qwen in the browser,
 3. waits for the answer,
-4. parses the result into actionable output.
+4. returns the plain Qwen answer by default.
+
+If you explicitly need machine-readable output, use `--json` so the repo prints the parsed payload instead.
 
 ## Files
 
@@ -33,6 +35,12 @@ It does not “think” for you. It:
 
 ```bash
 node ./index.js "Review the repo and propose the next implementation step"
+```
+
+Machine-readable output:
+
+```bash
+node ./index.js --json "Review the repo and propose the next implementation step"
 ```
 
 Optional snapshot before run:
@@ -160,6 +168,7 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 - `CHROME_CDP_URL` — attach to an already-running Chrome debug endpoint
 - `CHROME_REMOTE_DEBUGGING_PORT` — shorthand for a local CDP endpoint
 - `SIN_OMO_QWEN_DRY_RUN=1` — skip browser automation and print payload only
+- `--json` — print the parsed machine-readable payload instead of raw Qwen text
 - `SIN_OMO_QWEN_LOG_FILE` — JSONL log destination
 - `SIN_OMO_QWEN_ARTIFACT_DIR` — screenshot output directory
 - `INFISICAL_ENV_NAME` — Infisical environment slug for sync commands
@@ -175,7 +184,11 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 Run `/ask-qwen` from OpenCode after placing `./.opencode/commands/ask-qwen.sh` in the repo.
 See `INSTALL.md` for the full setup.
 
-The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message and the parser can still recover the final assistant JSON when Qwen chooses to answer that way.
+OpenCode can also expose `omo-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
+
+The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
+
+The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
 
 ## Handoff
 

@@ -12,7 +12,8 @@
 - `ignore-filter.js` — `.qwenignore` / `.gitignore` filtering
 - `git.js` — snapshot helper
 - `parser.js` — response parser
-- prompt delivery is human-style text, while the parser still prefers final assistant JSON over echoed prompt/context JSON
+- prompt delivery is human-style text, raw text is the default output, and the parser still prefers final assistant JSON over echoed prompt/context JSON
+- live chat auto-selects `Qwen3.6-Max-Preview` before sending the prompt
 - `preflight.js` — dependency and env checks
 - `secrets-check.js` — secret presence checks
 - `SECRETS.md` — Infisical and env checklist
@@ -35,6 +36,7 @@
 ## Commands
 
 - `npm run ask` — run the CLI
+- `npm run ask:json` — run the CLI with parsed JSON output
 - `npm run verify` — install, test, build
 - `node ./index.js --snapshot <prompt>` — snapshot before run
 - `node ./index.js --dry-run <prompt>` — context only

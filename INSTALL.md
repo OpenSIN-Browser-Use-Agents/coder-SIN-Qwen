@@ -62,11 +62,22 @@ Then run:
 /ask-qwen build a feature
 ```
 
-The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and can still recover the final assistant JSON when the page contains both prompt context and a JSON answer.
+If your OpenCode global config contains the `omo-SIN-Qwen` agent entry, you can also select `omo-SIN-Qwen` directly from the agent picker for Qwen-first execution.
+
+The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
+
+The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and returns the raw Qwen reply by default.
+
+If you need parsed machine-readable output instead:
+
+```bash
+node ./index.js --json "build a feature"
+```
 
 ## 5. Optional flags
 
 - `--dry-run`
+- `--json`
 - `--snapshot`
 - `--turns <n>`
 - `--smoke`
