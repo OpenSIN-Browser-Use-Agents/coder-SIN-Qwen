@@ -185,6 +185,8 @@ In attach mode the repo reuses an existing blank tab when possible, keeps your C
 Run `/ask-qwen` from OpenCode after placing `./.opencode/commands/ask-qwen.sh` in the repo.
 See `INSTALL.md` for the full setup.
 
+The global OpenCode config can also expose `/ask-qwen` and `/ask-qwen-json` command templates that call `node ./index.js` directly. That path is the preferred workaround if a local shell wrapper behaves inconsistently.
+
 OpenCode can also expose `omo-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
 
 The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.

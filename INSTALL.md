@@ -64,6 +64,8 @@ Then run:
 
 If your OpenCode global config contains the `omo-SIN-Qwen` agent entry, you can also select `omo-SIN-Qwen` directly from the agent picker for Qwen-first execution.
 
+If your global OpenCode config contains the `/ask-qwen` and `/ask-qwen-json` command templates, prefer those over the local shell wrapper because they call `node ./index.js` directly.
+
 The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
 
 The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and returns the raw Qwen reply by default.

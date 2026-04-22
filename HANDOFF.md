@@ -48,3 +48,4 @@
 - Extra Qwen turns are opt-in only via `--turns 2+` and each turn uses a fresh consult.
 - The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.
 - Open tracking issues: `#1 Stabilize ask-qwen wrapper execution`, `#2 Support real multi-turn Qwen conversations`.
+- Global OpenCode command templates for `/ask-qwen` and `/ask-qwen-json` can bypass wrapper-specific shell issues by calling `node ./index.js` directly.
