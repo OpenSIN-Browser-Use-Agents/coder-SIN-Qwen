@@ -21,6 +21,8 @@
 - add external-project mode with `--project-root`, issue URLs, capability manifests, and private-repo attachment candidates
 - add launcher-side CDP recovery that probes endpoints and can auto-start the sidecar before retrying attach
 - make CDP recovery fail fast when no live endpoint can be established, instead of falling back to a broken locked-profile launch
+- make sidecar startup itself bounded and self-verifying so recovery does not hang indefinitely on about:blank launches
+- switch the recovery sidecar to a more reliable macOS `open -na` launch path and a cleaner default debug port (`9444`)
 - prefer auto-attach to a reachable local CDP endpoint in the shared launcher to avoid Chrome profile-lock failures
 
 ## 0.1.0
