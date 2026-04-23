@@ -201,8 +201,7 @@ async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, l
   const forceEvidenceAttachments = /(screenshot|screenshots|image|images|bild|bilder|log|logs|trace|traces|upload|uploads|datei|dateien|attach|attachment|anhang|anhänge)/iu.test(String(prompt || ''));
   if (repoVisibility === 'public' && !forceEvidenceAttachments) return [];
 
-  const ranked = rankRelevantFiles(files, prompt)
-    .filter((file) => forceEvidenceAttachments || !/\.(?:png|jpg|jpeg|webp|txt|log)$/u.test(file))
+  const ranked = rankAttachmentCandidates(files, prompt, forceEvidenceAttachments)
     .slice(0, limit);
   const attachments = [];
 
@@ -223,6 +222,13 @@ async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, l
   }
 
   return attachments;
+}
+
+function rankAttachmentCandidates(files, prompt, forceEvidenceAttachments) {
+  const tokens = tokenizePrompt(prompt);
+  return [...files]
+    .filter((file) => forceEvidenceAttachments || !/\.(?:png|jpg|jpeg|webp|txt|log)$/u.test(file))
+    .sort((left, right) => attachmentScore(right, tokens, forceEvidenceAttachments) - attachmentScore(left, tokens, forceEvidenceAttachments) || left.localeCompare(right));
 }
 
 function rankRelevantFiles(files, prompt) {
@@ -247,6 +253,18 @@ function scoreFile(file, tokens) {
   }
   if (/readme|install|handoff|index|change(log)?|ops|security|secrets/u.test(lower)) score += 1;
   if (/browser|context|parser|verify|smoke|test|worker|issue|log|screenshot/u.test(lower)) score += 2;
+  return score;
+}
+
+function attachmentScore(file, tokens, forceEvidenceAttachments) {
+  let score = scoreFile(file, tokens);
+  const lower = file.toLowerCase();
+
+  if (/\.(?:log|txt|trace)$/u.test(lower)) score += forceEvidenceAttachments ? 30 : 5;
+  if (/\.(?:png|jpg|jpeg|webp)$/u.test(lower)) score += forceEvidenceAttachments ? 30 : 0;
+  if (/screenshot|screen|trace|error|fail|debug|log|issue/u.test(lower)) score += 20;
+  if (/readme|docs|md$/u.test(lower)) score += 8;
+  if (/worker|browser|context|config|issue/u.test(lower)) score += 10;
   return score;
 }
 
