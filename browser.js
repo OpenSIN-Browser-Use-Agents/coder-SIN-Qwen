@@ -11,6 +11,8 @@ const QWEN_URL = 'https://chat.qwen.ai';
 export const SELECTORS = {
   newChat: ['.sidebar-entry-fixed-list-content', '.sidebar-entry-fixed-list-text', 'button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', 'text=Neue Unterhaltung', '[data-testid="new-chat"]'],
   modelMenu: ['header span.ant-dropdown-trigger', 'header .index-module__model-selector-text___XvWe0', 'span.ant-dropdown-trigger', 'button:has-text("Model")', 'button:has-text("Modell")', '[data-testid="model-selector"]'],
+  thinkingMenu: ['.qwen-thinking-selector .ant-select-selector', '.qwen-thinking-selector [role="combobox"]', '.qwen-select-thinking-label', '.qwen-select-thinking-label-text'],
+  thinkingOption: ['.ant-select-item-option[title="Denken"]', '[role="option"][aria-label="Denken"]', '.ant-select-item-option[title="Thinking"]', '[role="option"][aria-label="Thinking"]'],
   promptInput: ['textarea.message-input-textarea', 'textarea:not(.ime-text-area):not([readonly])', '[contenteditable="true"]', 'input[type="text"]', 'textarea[aria-label*="message" i]', 'input[aria-label*="prompt" i]'],
   sendButton: ['.send-button', 'button[type="submit"]', 'button[aria-label*="send" i]', 'button:has-text("Send")', 'button:has-text("Senden")'],
   assistantOutput: ['.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.message-content', '.chat-message .content']
@@ -42,6 +44,7 @@ export async function runQwenSession(input, options = {}) {
     await maybeStartNewChat(page);
     await maybeSelectModel(page);
     await ensureMaxPreviewSelected(page);
+    await ensureThinkingModeSelected(page);
 
     const inputBox = await findPromptInput(page);
     if (!inputBox) {
@@ -54,6 +57,7 @@ export async function runQwenSession(input, options = {}) {
     for (let turn = 1; turn <= maxTurns; turn += 1) {
       const previousAssistantState = await getLastAssistantState(page);
       await ensureMaxPreviewSelected(page);
+      await ensureThinkingModeSelected(page);
       await enterPrompt(inputBox, currentPrompt);
       await submitPrompt(page, inputBox, currentPrompt, previousAssistantState);
       await waitForStreamingDone(page, previousAssistantState);
@@ -67,6 +71,7 @@ export async function runQwenSession(input, options = {}) {
       // Qwen can visually drift back to Plus after a send; re-assert Max Preview after each completed turn
       // so the active chat stays pinned to the intended model for both the next turn and the final UI state.
       await ensureMaxPreviewSelected(page);
+      await ensureThinkingModeSelected(page);
 
       if (turn >= maxTurns) break;
       if (!shouldContinueConversation(responseText)) break;
@@ -123,8 +128,11 @@ export async function runBrowserE2ECheck() {
     const modelSelection = await maybeSelectModel(page);
     artifactPaths.push(await captureScreenshot(page, 'smoke-03-after-model'));
 
+    const thinkingSelection = await maybeSelectThinkingMode(page);
+    artifactPaths.push(await captureScreenshot(page, 'smoke-04-after-thinking'));
+
     const inputFound = Boolean(await findPromptInput(page));
-    artifactPaths.push(await captureScreenshot(page, 'smoke-04-input-check'));
+    artifactPaths.push(await captureScreenshot(page, 'smoke-05-input-check'));
 
     const selectorReport = await collectSelectorReport(page);
     const selectorSummary = summarizeSelectorReport(selectorReport);
@@ -134,6 +142,7 @@ export async function runBrowserE2ECheck() {
       inputFound,
       newChat,
       modelSelection,
+      thinkingSelection,
       selectorReport,
       selectorSummary,
       artifactPaths
@@ -500,6 +509,80 @@ async function ensureMaxPreviewSelected(page) {
   if (!currentModel.includes('Qwen3.6-Max-Preview')) {
     throw new Error(`Qwen model selection failed. Expected Qwen3.6-Max-Preview but found ${currentModel || 'unknown model'}.`);
   }
+}
+
+async function maybeSelectThinkingMode(page) {
+  const result = { menuFound: false, optionFound: false, optionClicked: false, selector: '', currentMode: '' };
+  const currentMode = await readCurrentThinkingMode(page);
+  if (isThinkingMode(currentMode)) {
+    result.currentMode = currentMode;
+    return result;
+  }
+
+  for (const selector of SELECTORS.thinkingMenu) {
+    const trigger = page.locator(selector).first();
+    if (await trigger.count().catch(() => 0)) {
+      result.menuFound = true;
+      result.selector = selector;
+      await trigger.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(800);
+      for (const optionSelector of SELECTORS.thinkingOption) {
+        const option = page.locator(optionSelector).first();
+        if (await option.count().catch(() => 0)) {
+          result.optionFound = true;
+          result.currentMode = await readCurrentThinkingMode(page);
+          // Prefer the visible selected-option row; the aria-only option node can exist but not react to force clicks.
+          await option.click({ force: true }).then(() => { result.optionClicked = true; }).catch(() => {});
+          const afterMode = await waitForThinkingModeSettled(page);
+          if (isThinkingMode(afterMode)) {
+            result.currentMode = afterMode;
+            return result;
+          }
+        }
+      }
+      return result;
+    }
+  }
+  return result;
+}
+
+async function ensureThinkingModeSelected(page) {
+  // Qwen can silently fall back from Denken/Thinking to Automatisch or Schnell; enforce Denken before each send.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const currentMode = await readCurrentThinkingMode(page);
+    if (isThinkingMode(currentMode)) return;
+    await maybeSelectThinkingMode(page);
+    const afterMode = await waitForThinkingModeSettled(page);
+    if (isThinkingMode(afterMode)) return;
+  }
+
+  const currentMode = await readCurrentThinkingMode(page);
+  if (!isThinkingMode(currentMode)) {
+    throw new Error(`Qwen thinking mode selection failed. Expected Denken/Thinking but found ${currentMode || 'unknown mode'}.`);
+  }
+}
+
+async function readCurrentThinkingMode(page) {
+  for (const selector of SELECTORS.thinkingMenu) {
+    const text = await page.locator(selector).first().innerText().catch(() => '');
+    const normalized = String(text || '').trim();
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+function isThinkingMode(mode) {
+  return /^(denken|thinking)$/iu.test(String(mode || '').trim());
+}
+
+async function waitForThinkingModeSettled(page) {
+  await page.waitForFunction(() => {
+    const label = document.querySelector('.qwen-select-thinking-label-text');
+    const text = String(label?.textContent || '').trim();
+    return /^(Denken|Thinking)$/iu.test(text);
+  }, { timeout: 4000, polling: 150 }).catch(() => {});
+  await page.waitForTimeout(300);
+  return readCurrentThinkingMode(page);
 }
 
 async function readCurrentModel(page) {
