@@ -23,7 +23,7 @@ export async function buildContext({ prompt, projectRoot = process.cwd() }) {
   const issueReferences = extractIssueReferences(prompt);
   const capabilityManifest = buildCapabilityManifest(prompt);
   const fileReferences = buildFileReferences(filteredFiles, prompt, repoVisibility === 'public' ? repoUrls.blobBase : '');
-  const attachmentCandidates = await buildAttachmentCandidates({ cwd, files: filteredFiles, prompt, repoVisibility });
+  const attachmentCandidates = await buildAttachmentCandidates({ cwd, files, prompt, repoVisibility });
   const references = buildBestPracticeReferences(prompt, pkg, filteredFiles, repoVisibility === 'public' ? repoUrls.web : '', issueReferences);
 
   return {
@@ -201,11 +201,15 @@ async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, l
   const forceEvidenceAttachments = /(screenshot|screenshots|image|images|bild|bilder|log|logs|trace|traces|upload|uploads|datei|dateien|attach|attachment|anhang|anhänge)/iu.test(String(prompt || ''));
   if (repoVisibility === 'public' && !forceEvidenceAttachments) return [];
 
-  const ranked = rankAttachmentCandidates(files, prompt, forceEvidenceAttachments)
-    .slice(0, limit);
+  const ranked = rankAttachmentCandidates(files, prompt, forceEvidenceAttachments);
+  const mustInclude = forceEvidenceAttachments
+    ? ranked.filter((file) => /\.(?:log|txt|trace|png|jpg|jpeg|webp)$/u.test(file)).slice(0, Math.min(4, limit))
+    : [];
+  const rankedSet = new Set(mustInclude);
+  const selected = [...mustInclude, ...ranked.filter((file) => !rankedSet.has(file))].slice(0, limit);
   const attachments = [];
 
-  for (const relativePath of ranked) {
+  for (const relativePath of selected) {
     const absolutePath = path.join(cwd, relativePath);
     try {
       const stat = await fs.stat(absolutePath);
@@ -260,8 +264,8 @@ function attachmentScore(file, tokens, forceEvidenceAttachments) {
   let score = scoreFile(file, tokens);
   const lower = file.toLowerCase();
 
-  if (/\.(?:log|txt|trace)$/u.test(lower)) score += forceEvidenceAttachments ? 30 : 5;
-  if (/\.(?:png|jpg|jpeg|webp)$/u.test(lower)) score += forceEvidenceAttachments ? 30 : 0;
+  if (/\.(?:log|txt|trace)$/u.test(lower)) score += forceEvidenceAttachments ? 80 : 5;
+  if (/\.(?:png|jpg|jpeg|webp)$/u.test(lower)) score += forceEvidenceAttachments ? 70 : 0;
   if (/screenshot|screen|trace|error|fail|debug|log|issue/u.test(lower)) score += 20;
   if (/readme|docs|md$/u.test(lower)) score += 8;
   if (/worker|browser|context|config|issue/u.test(lower)) score += 10;
