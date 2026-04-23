@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Check whether a local Chrome CDP endpoint is reachable.
-PORT="${CHROME_REMOTE_DEBUGGING_PORT:-9335}"
+PORT="${CHROME_REMOTE_DEBUGGING_PORT:-9444}"
 URL="${CHROME_CDP_URL:-http://127.0.0.1:$PORT}"
 
 VERSION_URL="${URL%/}/json/version"

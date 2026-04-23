@@ -7,6 +7,7 @@ export function buildCandidateCdpUrls(env = process.env) {
     env.CHROME_CDP_URL || '',
     env.CHROME_REMOTE_DEBUGGING_PORT ? `http://127.0.0.1:${env.CHROME_REMOTE_DEBUGGING_PORT}` : '',
     env.WEBAUTO_CDP_PORT ? `http://127.0.0.1:${env.WEBAUTO_CDP_PORT}` : '',
+    'http://127.0.0.1:9444',
     'http://127.0.0.1:9335',
     'http://127.0.0.1:9222'
   ].filter(Boolean);
@@ -63,25 +64,38 @@ export async function waitForReachableCdp(candidates, timeoutMs = 20_000) {
 
 async function startSidecar(repoRoot, env) {
   try {
-    await runNodeScript(path.join(repoRoot, 'scripts', 'start-cdp-sidecar.sh'), env, repoRoot);
+    const recoveryEnv = {
+      ...env,
+      CHROME_REMOTE_DEBUGGING_PORT: env.CHROME_REMOTE_DEBUGGING_PORT || '9444'
+    };
+    await runNodeScript(path.join(repoRoot, 'scripts', 'start-cdp-sidecar.sh'), recoveryEnv, repoRoot, Number(env.CHROME_SIDECAR_START_TIMEOUT_MS || 25000));
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error?.message || String(error) };
   }
 }
 
-function runNodeScript(scriptPath, env, cwd) {
+function runNodeScript(scriptPath, env, cwd, timeoutMs) {
   return new Promise((resolve, reject) => {
     const child = spawn('bash', [scriptPath], {
       cwd,
       env,
       stdio: 'ignore'
     });
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error(`sidecar launch timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    if (typeof timeout.unref === 'function') timeout.unref();
     child.on('exit', (code) => {
+      clearTimeout(timeout);
       if (code === 0) resolve();
       else reject(new Error(`sidecar launch exited with code ${code}`));
     });
-    child.on('error', reject);
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
   });
 }
 

@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Launch a separate Chrome sidecar with remote debugging so the user's main Chrome can stay open.
 ROOT_DIR="$(pwd)"
-PORT="${CHROME_REMOTE_DEBUGGING_PORT:-9335}"
+PORT="${CHROME_REMOTE_DEBUGGING_PORT:-9444}"
+CDP_URL="http://127.0.0.1:${PORT}"
 SOURCE_PROFILE="${CHROME_PROFILE:-$HOME/Library/Application Support/Google/Chrome/Default}"
 PROFILE_DIRECTORY="${CHROME_PROFILE_DIRECTORY:-Default}"
 SIDECAR_ROOT="${CHROME_SIDECAR_ROOT:-$ROOT_DIR/.chrome-cdp-sidecar}"
@@ -12,6 +13,7 @@ TARGET_PROFILE_DIR="$TARGET_USER_DATA_DIR/$PROFILE_DIRECTORY"
 SYNC_MODE="${CHROME_SIDECAR_SYNC_MODE:-none}"
 CHROME_BIN="${CHROME_BIN:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 SIDECAR_LOG="${CHROME_SIDECAR_LOG:-$SIDECAR_ROOT/chrome-sidecar.log}"
+START_TIMEOUT_SECONDS="${CHROME_SIDECAR_START_TIMEOUT_SECONDS:-20}"
 
 mkdir -p "$TARGET_PROFILE_DIR"
 
@@ -74,15 +76,7 @@ PY
 
 mkdir -p "$(dirname "$SIDECAR_LOG")"
 
-if [[ "$OSTYPE" == darwin* && -x "$CHROME_BIN" ]]; then
-  nohup "$CHROME_BIN" \
-    --remote-debugging-port="$PORT" \
-    --user-data-dir="$TARGET_USER_DATA_DIR" \
-    --profile-directory="$PROFILE_DIRECTORY" \
-    --no-first-run \
-    --no-default-browser-check \
-    about:blank >>"$SIDECAR_LOG" 2>&1 &
-elif [[ "$OSTYPE" == darwin* ]]; then
+if [[ "$OSTYPE" == darwin* ]]; then
   nohup open -na "Google Chrome" --args \
     --remote-debugging-port="$PORT" \
     --user-data-dir="$TARGET_USER_DATA_DIR" \
@@ -102,6 +96,22 @@ fi
 
 echo "CDP sidecar launch requested."
 echo "Export this before live runs:"
-echo "export CHROME_CDP_URL=http://127.0.0.1:$PORT"
+echo "export CHROME_CDP_URL=$CDP_URL"
 echo "Sync mode: $SYNC_MODE"
 echo "Log file: $SIDECAR_LOG"
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl is required to verify the CDP sidecar startup."
+  exit 1
+fi
+
+for ((i=0; i<START_TIMEOUT_SECONDS; i++)); do
+  if curl --max-time 2 --silent --show-error "$CDP_URL/json/version" >/dev/null 2>&1; then
+    echo "CDP sidecar reachable at $CDP_URL"
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "CDP sidecar did not become reachable within ${START_TIMEOUT_SECONDS}s. Check: $SIDECAR_LOG"
+exit 1
