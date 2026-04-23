@@ -212,12 +212,18 @@ For repo-aware prompts, the relay now also includes:
 - the repository web URL
 - commit URL
 - selected file URLs from the current repo state
+- issue URLs explicitly present in the task
+- capability manifest entries that describe the relay's evidence/tool boundaries
 - curated official reference URLs for relevant technologies such as Node.js, Playwright, GitHub Actions, and Infisical when applicable
 - persistent consult metadata (`context_id`, `message_id`, previous summary)
 - a canonical `state_snapshot` envelope with protocol version, sender/receiver metadata, decision history, constraints, and completion criteria
 - a validator/critic review pass that scores replies, flags violations, and can strip fluff before returning text output
 - an autotraining module that stores snapshot/suggestion pairs for iterative Qwen-guided self-improvement
 - a lifecycle manager that tracks browser/CLI resources and performs bounded graceful cleanup on shutdown or fatal process events
+
+Public/private behavior:
+- public repos: prefer repo/file/issue URLs plus official provider/platform docs links
+- private repos: attach relevant local files instead of relying on inaccessible repo URLs
 
 Resolved milestones:
 

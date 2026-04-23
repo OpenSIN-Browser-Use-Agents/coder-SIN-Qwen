@@ -18,6 +18,7 @@
 - add `modul-qwen-autotraining` and `cli-autotraining.js` for Qwen-guided self-improvement snapshots and suggestions
 - add `lifecycle.js` for bounded graceful shutdown and resource cleanup across CLI/browser flows
 - enforce the Qwen thinking selector onto `Denken` / `Thinking` before each send
+- add external-project mode with `--project-root`, issue URLs, capability manifests, and private-repo attachment candidates
 
 ## 0.1.0
 

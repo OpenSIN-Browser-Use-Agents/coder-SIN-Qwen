@@ -74,6 +74,8 @@ For repo-aware prompts, the relay includes GitHub URLs for the repo and relevant
 It also persists compact consult memory with `context_id`, `message_id`, and the previous summary in `.coder-sin-qwen-memory.json` by default.
 The persisted prompt state now follows a canonical `state_snapshot` envelope so future consults can resume from compact structured memory instead of raw chat history.
 Repo-aware replies now also pass through a deterministic validator/critic layer that can flag violations and strip obvious fluff before stdout is returned.
+When you invoke coder-SIN-Qwen from another repo, pass that target repo as `--project-root "$PWD"` (the global launcher now does this automatically).
+For public repos the relay sends repo/file/issue URLs plus provider docs; for private repos it uploads relevant local files instead.
 
 The wrapper has been validated in CDP attach mode against Qwen; it sends a normal human-style message and returns the raw Qwen reply by default.
 

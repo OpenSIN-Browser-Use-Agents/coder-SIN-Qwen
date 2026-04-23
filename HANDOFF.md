@@ -48,7 +48,7 @@
 - After each completed turn the relay re-asserts `Qwen3.6-Max-Preview` to keep the active chat visually pinned to the intended model.
 - Before each prompt send the relay now also enforces the thinking selector to `Denken` / `Thinking`.
 - Extra Qwen turns are opt-in only via `--turns 2+` and now stay in the same chat.
-- Repo-aware prompts now include repository URLs, relevant file URLs, and curated official reference URLs for the detected stack.
+- Repo-aware prompts now include repository URLs, relevant file URLs, issue URLs, capability manifests, and curated official reference URLs for the detected stack.
 - Repo-aware consults now persist `context_id`, `message_id`, and the latest compact summary in `.coder-sin-qwen-memory.json` (or `SIN_CODER_QWEN_MEMORY_FILE`).
 - The consult memory now follows a canonical `state_snapshot` envelope (`protocolVersion`, `metadata`, `mandate`, `stateSnapshot`, `decisionHistory`, `constraints`, `completionCriteria`).
 - Repo-aware replies now flow through `validator.js`, which produces a deterministic review object (`pass`, `score`, `violations`, `retry_action`) before stdout/log persistence.
@@ -57,3 +57,4 @@
 - The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.
 - Resolved milestones: `#1 Stabilize ask-qwen wrapper execution`, `#2 Support real multi-turn Qwen conversations`, `#3 Keep Max Preview pinned after each turn`.
 - The repo-local OpenCode config now defines `/ask-qwen`, `/ask-qwen-json`, and the `coder-SIN-Qwen` agent directly in `.opencode/opencode.json` so the shell wrapper is no longer required.
+- The global OpenCode config now uses a portable launcher plus `--project-root "$PWD"`, so external repos do not accidentally send coder-SIN-Qwen's own repo context to Qwen.
