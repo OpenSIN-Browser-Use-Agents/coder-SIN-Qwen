@@ -130,6 +130,8 @@ export CHROME_CDP_URL="http://127.0.0.1:9335"
 
 By default the sidecar uses a **minimal auth/state sync** for faster startup. Set `CHROME_SIDECAR_SYNC_MODE=full` only if the minimal snapshot misses required session state.
 
+The shared launcher now probes known local CDP endpoints first and, if none are reachable, can auto-start the repo sidecar before retrying attach.
+
 ## Browser setup
 
 The browser flow is strict UI-only and uses your local Chrome `Default` profile.
