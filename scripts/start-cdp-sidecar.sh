@@ -9,7 +9,9 @@ PROFILE_DIRECTORY="${CHROME_PROFILE_DIRECTORY:-Default}"
 SIDECAR_ROOT="${CHROME_SIDECAR_ROOT:-$ROOT_DIR/.chrome-cdp-sidecar}"
 TARGET_USER_DATA_DIR="$SIDECAR_ROOT/user-data"
 TARGET_PROFILE_DIR="$TARGET_USER_DATA_DIR/$PROFILE_DIRECTORY"
-SYNC_MODE="${CHROME_SIDECAR_SYNC_MODE:-minimal}"
+SYNC_MODE="${CHROME_SIDECAR_SYNC_MODE:-none}"
+CHROME_BIN="${CHROME_BIN:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
+SIDECAR_LOG="${CHROME_SIDECAR_LOG:-$SIDECAR_ROOT/chrome-sidecar.log}"
 
 mkdir -p "$TARGET_PROFILE_DIR"
 
@@ -31,24 +33,18 @@ minimal_items = [
     'Secure Preferences',
     'Cookies',
     'Cookies-journal',
-    'Network',
     'Local Storage',
-    'IndexedDB',
-    'Session Storage',
     'Sessions',
     'Web Data',
-    'Web Data-journal',
-    'Login Data',
-    'Login Data For Account',
-    'Login Data-journal',
-    'Service Worker',
-    'Storage'
+    'Web Data-journal'
 ]
 
 if not source_dir.exists():
     raise SystemExit(f'Source profile not found: {source_dir}')
 
-if sync_mode == 'full':
+if sync_mode == 'none':
+    items = []
+elif sync_mode == 'full':
     items = [p.name for p in source_dir.iterdir() if p.name not in {
         'SingletonLock', 'SingletonCookie', 'SingletonSocket', 'Crashpad',
         'Code Cache', 'GPUCache', 'ShaderCache', 'DawnCache', 'Cache'
@@ -76,14 +72,24 @@ for name in items:
 print(f'Prepared sidecar profile: {target_profile}')
 PY
 
-if [[ "$OSTYPE" == darwin* ]]; then
+mkdir -p "$(dirname "$SIDECAR_LOG")"
+
+if [[ "$OSTYPE" == darwin* && -x "$CHROME_BIN" ]]; then
+  nohup "$CHROME_BIN" \
+    --remote-debugging-port="$PORT" \
+    --user-data-dir="$TARGET_USER_DATA_DIR" \
+    --profile-directory="$PROFILE_DIRECTORY" \
+    --no-first-run \
+    --no-default-browser-check \
+    about:blank >>"$SIDECAR_LOG" 2>&1 &
+elif [[ "$OSTYPE" == darwin* ]]; then
   nohup open -na "Google Chrome" --args \
     --remote-debugging-port="$PORT" \
     --user-data-dir="$TARGET_USER_DATA_DIR" \
     --profile-directory="$PROFILE_DIRECTORY" \
     --no-first-run \
     --no-default-browser-check \
-    about:blank >/dev/null 2>&1 &
+    about:blank >>"$SIDECAR_LOG" 2>&1 &
 else
   nohup google-chrome \
     --remote-debugging-port="$PORT" \
@@ -91,10 +97,11 @@ else
     --profile-directory="$PROFILE_DIRECTORY" \
     --no-first-run \
     --no-default-browser-check \
-    about:blank >/dev/null 2>&1 &
+    about:blank >>"$SIDECAR_LOG" 2>&1 &
 fi
 
 echo "CDP sidecar launch requested."
 echo "Export this before live runs:"
 echo "export CHROME_CDP_URL=http://127.0.0.1:$PORT"
 echo "Sync mode: $SYNC_MODE"
+echo "Log file: $SIDECAR_LOG"

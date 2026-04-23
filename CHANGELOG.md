@@ -20,6 +20,7 @@
 - enforce the Qwen thinking selector onto `Denken` / `Thinking` before each send
 - add external-project mode with `--project-root`, issue URLs, capability manifests, and private-repo attachment candidates
 - add launcher-side CDP recovery that probes endpoints and can auto-start the sidecar before retrying attach
+- make CDP recovery fail fast when no live endpoint can be established, instead of falling back to a broken locked-profile launch
 - prefer auto-attach to a reachable local CDP endpoint in the shared launcher to avoid Chrome profile-lock failures
 
 ## 0.1.0

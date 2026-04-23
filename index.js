@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Main CLI entrypoint for the standalone Qwen relay agent.
 import { buildContext } from './context.js';
-import { runQwenSession } from './browser.js';
+import { detectChromeProfileLock, resolveChromeConnectionConfig, runQwenSession } from './browser.js';
 import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
+import { ensureReachableCdp } from './cdp-recovery.js';
 import { parseQwenResponse } from './parser.js';
 import { createSnapshot } from './git.js';
 import { runSmokeCheck } from './smoke.js';
@@ -76,6 +77,10 @@ async function main() {
   const dryRun = dryRunFlag || getScopedEnv('DRY_RUN', '0') === '1';
   const logFile = resolveLogFile();
   const sessionTimeoutMs = Number(getScopedEnv('SESSION_TIMEOUT_MS', '180000'));
+
+  if (!dryRun) {
+    await prepareChromeConnectionForRun();
+  }
 
   // Persist lightweight structured logs so runs can be audited later.
   writeLogEntry({
@@ -165,4 +170,22 @@ async function runControlledConversation(initialContext, originalPrompt, maxTurn
     sessionTimeoutMs,
     `Qwen session timed out after ${sessionTimeoutMs}ms`
   );
+}
+
+async function prepareChromeConnectionForRun() {
+  // If the default Chrome profile is already in use, prefer recovering a reachable CDP endpoint
+  // instead of blindly falling back to a persistent launch that will fail under a profile lock.
+  const launchConfig = resolveChromeConnectionConfig();
+  if (launchConfig.mode === 'attach') return;
+
+  const lockState = detectChromeProfileLock(launchConfig);
+  if (!lockState.locked) return;
+
+  const recovery = await ensureReachableCdp({ repoRoot: process.cwd(), env: process.env });
+  if (recovery.ok && recovery.cdpUrl) {
+    process.env.CHROME_CDP_URL = recovery.cdpUrl;
+    return;
+  }
+
+  throw new Error(`Chrome profile is already in use and no reachable CDP endpoint could be recovered. ${recovery.error || 'Start a sidecar or export CHROME_CDP_URL manually.'}`.trim());
 }
