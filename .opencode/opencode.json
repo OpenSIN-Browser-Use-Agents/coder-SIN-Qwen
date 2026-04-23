@@ -23,14 +23,6 @@
     "ask-qwen-json": {
       "description": "Ask the local Qwen relay in parsed JSON mode",
       "template": "Nutze coder-SIN-Qwen strikt als Qwen-first relay. Sammle zuerst den relevanten Arbeitskontext aus dem aktuellen Projekt: betroffene Dateien, relevante Logs/Screenshots, issue URLs, repo context und wichtige Provider-/Plattform-Doku. Fuer public repos bevorzuge repo/file/issue URLs; fuer private repos oder lokale Evidenz nutze lokale Dateien/Anhänge statt unzugänglicher URLs. Fuehre danach exakt diesen Befehl aus: `node ./index.js --project-root \"$PWD\" --json --turns 1 \"$ARGUMENTS\"`. Nutze NICHT `npm run cdp:start`, NICHT webauto-nodriver direkt und NICHT den coder-SIN-Qwen Repo-Kontext, wenn eigentlich ein anderes Projekt gemeint ist. Gib das JSON-Ergebnis kompakt wieder."
-    },
-    "ask_qwen": {
-      "description": "Alias for ask-qwen",
-      "template": "Nutze coder-SIN-Qwen strikt als Qwen-first relay. Sammle zuerst den relevanten Arbeitskontext aus dem aktuellen Projekt: betroffene Dateien, relevante Logs/Screenshots, issue URLs, repo context und wichtige Provider-/Plattform-Doku. Fuer public repos bevorzuge repo/file/issue URLs; fuer private repos oder lokale Evidenz nutze lokale Dateien/Anhänge statt unzugänglicher URLs. Fuehre danach exakt diesen Befehl aus: `node ./index.js --project-root \"$PWD\" --turns 1 \"$ARGUMENTS\"`. Nutze NICHT `npm run cdp:start`, NICHT webauto-nodriver direkt und NICHT den coder-SIN-Qwen Repo-Kontext, wenn eigentlich ein anderes Projekt gemeint ist. Gib danach nur die stdout-Antwort von Qwen knapp wieder."
-    },
-    "ask_qwen_json": {
-      "description": "Alias for ask-qwen-json",
-      "template": "Nutze coder-SIN-Qwen strikt als Qwen-first relay. Sammle zuerst den relevanten Arbeitskontext aus dem aktuellen Projekt: betroffene Dateien, relevante Logs/Screenshots, issue URLs, repo context und wichtige Provider-/Plattform-Doku. Fuer public repos bevorzuge repo/file/issue URLs; fuer private repos oder lokale Evidenz nutze lokale Dateien/Anhänge statt unzugänglicher URLs. Fuehre danach exakt diesen Befehl aus: `node ./index.js --project-root \"$PWD\" --json --turns 1 \"$ARGUMENTS\"`. Nutze NICHT `npm run cdp:start`, NICHT webauto-nodriver direkt und NICHT den coder-SIN-Qwen Repo-Kontext, wenn eigentlich ein anderes Projekt gemeint ist. Gib das JSON-Ergebnis kompakt wieder."
     }
   }
 }
