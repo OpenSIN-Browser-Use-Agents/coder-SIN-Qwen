@@ -197,6 +197,7 @@ Run `/ask-qwen` from OpenCode through the repo-local `./.opencode/opencode.json`
 See `INSTALL.md` for the full setup.
 
 The global OpenCode config can also expose `/ask-qwen` and `/ask-qwen-json` command templates that call `node ./index.js` directly. The repo-local config now follows that same direct-CLI path instead of relying on a shell wrapper.
+The shared global launcher now also auto-detects a reachable local CDP endpoint (for example `127.0.0.1:9335`) before falling back to browser launch, which avoids Chrome profile-lock failures when your main browser is already running.
 
 OpenCode can also expose `coder-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
 

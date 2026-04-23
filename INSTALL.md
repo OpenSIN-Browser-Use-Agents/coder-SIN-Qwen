@@ -66,6 +66,7 @@ If your OpenCode global config contains the `coder-SIN-Qwen` agent entry, you ca
 
 The repo-local `/ask-qwen` and `/ask-qwen-json` entries call `node ./index.js` directly.
 If your global OpenCode config also contains those commands, both paths use the same direct CLI strategy.
+The shared global launcher auto-detects a reachable local CDP endpoint first, so it can attach instead of launching a second Chrome owner when your main browser is already open.
 
 The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
 After each completed turn it will also re-assert `Qwen3.6-Max-Preview` so the same chat does not visually drift back to Plus.
