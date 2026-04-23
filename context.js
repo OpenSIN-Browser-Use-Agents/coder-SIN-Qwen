@@ -2,13 +2,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { loadIgnorePatterns, filterPaths } from './ignore-filter.js';
 
-export async function buildContext({ prompt }) {
+export async function buildContext({ prompt, projectRoot = process.cwd() }) {
   // Gather only the metadata Qwen needs so prompts stay smaller and easier to reason about.
   if (!shouldAttachRepoContext(prompt)) {
     return prompt;
   }
 
-  const cwd = process.cwd();
+  const cwd = projectRoot;
   const [gitRemote, pkg, files] = await Promise.all([
     readGitRemote(cwd),
     readPackageJson(cwd),
@@ -19,8 +19,12 @@ export async function buildContext({ prompt }) {
   const filteredFiles = filterPaths(files, ig).slice(0, 60);
   const gitMeta = await readGitMeta(cwd);
   const repoUrls = buildRepoUrls(gitRemote, gitMeta.head);
-  const fileReferences = buildFileReferences(filteredFiles, prompt, repoUrls.blobBase);
-  const references = buildBestPracticeReferences(prompt, pkg, filteredFiles, repoUrls.web);
+  const repoVisibility = await readRepoVisibility(cwd, repoUrls.web);
+  const issueReferences = extractIssueReferences(prompt);
+  const capabilityManifest = buildCapabilityManifest(prompt);
+  const fileReferences = buildFileReferences(filteredFiles, prompt, repoVisibility === 'public' ? repoUrls.blobBase : '');
+  const attachmentCandidates = await buildAttachmentCandidates({ cwd, files: filteredFiles, prompt, repoVisibility });
+  const references = buildBestPracticeReferences(prompt, pkg, filteredFiles, repoVisibility === 'public' ? repoUrls.web : '', issueReferences);
 
   return {
     prompt,
@@ -28,14 +32,19 @@ export async function buildContext({ prompt }) {
       cwd,
       remote: gitRemote,
       ...gitMeta,
-      urls: repoUrls
+      urls: repoUrls,
+      visibility: repoVisibility
     },
     package: pkg,
     files: filteredFiles,
     fileReferences,
+    issueReferences,
+    attachmentCandidates,
+    capabilityManifest,
     references,
     constraints: [
       'Use the provided repo and file URLs when code context matters.',
+      'If the target repo is private or inaccessible by URL, use attached local files instead of relying on repo URLs.',
       'Prefer official references over guessed behavior.'
     ],
     completionCriteria: [
@@ -54,7 +63,7 @@ function shouldAttachRepoContext(prompt) {
   // Simple chat turns work better when Qwen receives the user's message directly instead of a repo dump.
   const text = String(prompt || '').trim();
   if (!text) return false;
-  const repoKeywords = /(repo|repository|project|code|file|files|bug|fix|implement|implementation|refactor|test|build|package|dependency|dependencies|branch|commit|docs|documentation|agent|opencode|qwen)/iu;
+  const repoKeywords = /(repo|repository|project|code|file|files|bug|fix|implement|implementation|refactor|test|build|package|dependency|dependencies|branch|commit|docs|documentation|agent|opencode|qwen|issue|worker|platform|provider)/iu;
   return repoKeywords.test(text);
 }
 
@@ -113,6 +122,23 @@ async function readGitMeta(cwd) {
   }
 }
 
+async function readRepoVisibility(cwd, repoWebUrl) {
+  if (!repoWebUrl || !repoWebUrl.includes('github.com/')) return 'private';
+  const repoSlug = repoWebUrl.replace('https://github.com/', '');
+
+  try {
+    const { execFile } = await import('node:child_process');
+    return await new Promise((resolve) => {
+      execFile('gh', ['repo', 'view', repoSlug, '--json', 'visibility', '--jq', '.visibility'], { cwd, encoding: 'utf8' }, (error, stdout) => {
+        if (error) return resolve('private');
+        resolve(stdout.trim().toLowerCase() === 'public' ? 'public' : 'private');
+      });
+    });
+  } catch {
+    return 'private';
+  }
+}
+
 async function collectProjectFiles(root) {
   // Recursively collect relevant project files, then filter them later with .qwenignore rules.
   const results = [];
@@ -124,17 +150,15 @@ async function collectProjectFiles(root) {
     const entries = await fs.readdir(absolute, { withFileTypes: true });
 
     for (const entry of entries) {
-      // Skip the Git metadata directory to avoid noisy and expensive traversal.
       if (entry.name === '.git') continue;
       const relative = current === '.' ? entry.name : path.posix.join(current, entry.name);
-      const fullPath = path.join(root, relative);
 
       if (entry.isDirectory()) {
         stack.push(relative);
         continue;
       }
 
-      if (/\.(?:js|mjs|cjs|ts|tsx|json|md|sh|yml|yaml)$/u.test(entry.name)) {
+      if (/\.(?:py|js|mjs|cjs|ts|tsx|json|md|sh|yml|yaml|txt|log|png|jpg|jpeg|webp)$/u.test(entry.name)) {
         results.push(relative);
       }
     }
@@ -173,6 +197,25 @@ function buildFileReferences(files, prompt, blobBase, limit = 12) {
   }));
 }
 
+async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, limit = 10 }) {
+  if (repoVisibility === 'public') return [];
+  const ranked = rankRelevantFiles(files, prompt).slice(0, limit);
+  const attachments = [];
+
+  for (const relativePath of ranked) {
+    const absolutePath = path.join(cwd, relativePath);
+    try {
+      const stat = await fs.stat(absolutePath);
+      if (!stat.isFile()) continue;
+      attachments.push({ path: relativePath, absolutePath, size: stat.size, reason: 'private_repo_context' });
+    } catch {
+      // Ignore unreadable files.
+    }
+  }
+
+  return attachments;
+}
+
 function rankRelevantFiles(files, prompt) {
   const tokens = tokenizePrompt(prompt);
   return [...files].sort((left, right) => scoreFile(right, tokens) - scoreFile(left, tokens) || left.localeCompare(right));
@@ -194,11 +237,30 @@ function scoreFile(file, tokens) {
     if (path.posix.basename(lower).includes(token)) score += 2;
   }
   if (/readme|install|handoff|index|change(log)?|ops|security|secrets/u.test(lower)) score += 1;
-  if (/browser|context|parser|verify|smoke|test/u.test(lower)) score += 2;
+  if (/browser|context|parser|verify|smoke|test|worker|issue|log|screenshot/u.test(lower)) score += 2;
   return score;
 }
 
-function buildBestPracticeReferences(prompt, pkg, files, repoWebUrl) {
+function extractIssueReferences(prompt) {
+  const urls = String(prompt || '').match(/https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/issues\/\d+/gu) || [];
+  return [...new Set(urls)].map((url) => ({ url }));
+}
+
+function buildCapabilityManifest(prompt) {
+  const joined = String(prompt || '').toLowerCase();
+  const items = [
+    { name: 'repo_urls', supported: true, reason: 'Public repos can be referenced by repository and file URLs.' },
+    { name: 'private_file_attachments', supported: true, reason: 'Private repos can be represented by direct local file attachments.' },
+    { name: 'issue_urls', supported: true, reason: 'GitHub issue URLs can be forwarded when present in the task.' },
+    { name: 'screenshots_metadata', supported: true, reason: 'Screenshot and artifact metadata can be included when available.' }
+  ];
+  if (joined.includes('opencode')) {
+    items.push({ name: 'opencode_docs', supported: true, reason: 'OpenCode documentation links should be included when the task concerns OpenCode.' });
+  }
+  return items;
+}
+
+function buildBestPracticeReferences(prompt, pkg, files, repoWebUrl, issueReferences = []) {
   const joined = `${prompt} ${files.join(' ')} ${pkg.dependencies.join(' ')} ${pkg.devDependencies.join(' ')}`.toLowerCase();
   const references = [];
 
@@ -224,11 +286,19 @@ function buildBestPracticeReferences(prompt, pkg, files, repoWebUrl) {
     });
   }
 
-  if (joined.includes('github') || joined.includes('workflow') || joined.includes('release') || joined.includes('ci')) {
+  if (joined.includes('github') || joined.includes('workflow') || joined.includes('release') || joined.includes('ci') || joined.includes('issue')) {
     references.push({
       label: 'GitHub Actions docs',
       url: 'https://docs.github.com/actions',
       reason: 'Official CI/CD and workflow guidance.'
+    });
+  }
+
+  if (joined.includes('opencode')) {
+    references.push({
+      label: 'OpenCode documentation',
+      url: 'https://opencode.ai/docs',
+      reason: 'Official OpenCode documentation for commands, config, and workflows.'
     });
   }
 
@@ -242,6 +312,14 @@ function buildBestPracticeReferences(prompt, pkg, files, repoWebUrl) {
       label: 'Infisical CLI secrets docs',
       url: 'https://infisical.com/docs/cli/commands/secrets',
       reason: 'Official secret set/get and path behavior.'
+    });
+  }
+
+  for (const issue of issueReferences) {
+    references.push({
+      label: 'Issue URL',
+      url: issue.url,
+      reason: 'Relevant GitHub issue explicitly referenced in the task.'
     });
   }
 

@@ -22,6 +22,8 @@ async function main() {
   const smokeFlag = argv.includes('--smoke');
   const smokeLiveFlag = argv.includes('--smoke-live');
   const preflightFlag = argv.includes('--preflight');
+  const projectRootArgIndex = argv.indexOf('--project-root');
+  const projectRoot = projectRootArgIndex >= 0 ? String(argv[projectRootArgIndex + 1] || '').trim() : '';
   const restoreLastFlag = argv.includes('--restore-last');
   const restoreArgIndex = argv.indexOf('--restore');
   const restoreHash = restoreArgIndex >= 0 && /^[0-9a-f]{7,40}$/iu.test(argv[restoreArgIndex + 1] || '') ? argv[restoreArgIndex + 1] : '';
@@ -30,12 +32,14 @@ async function main() {
   const input = argv.filter((arg, index) => {
     if (arg === '--turns') return false;
     if (turnArgIndex >= 0 && index === turnArgIndex + 1) return false;
+    if (arg === '--project-root') return false;
+    if (projectRootArgIndex >= 0 && index === projectRootArgIndex + 1) return false;
     if (arg === '--restore') return false;
     if (restoreArgIndex >= 0 && index === restoreArgIndex + 1) return false;
     return !arg.startsWith('--');
   }).join(' ').trim();
   if (!input && !smokeFlag && !smokeLiveFlag && !preflightFlag && !restoreLastFlag && !restoreHash) {
-    console.error('Usage: ask-qwen [--json] [--snapshot] [--dry-run] [--smoke|--smoke-live] [--preflight] [--restore-last|--restore <hash>] [--turns <n>] <prompt>');
+    console.error('Usage: ask-qwen [--json] [--snapshot] [--dry-run] [--smoke|--smoke-live] [--preflight] [--restore-last|--restore <hash>] [--project-root <path>] [--turns <n>] <prompt>');
     process.exit(1);
   }
 
@@ -67,7 +71,7 @@ async function main() {
     return;
   }
 
-  const baseContext = await buildContext({ prompt: input });
+  const baseContext = await buildContext({ prompt: input, projectRoot });
   const { context, consultMeta } = await hydrateConsultContext(baseContext, input);
   const dryRun = dryRunFlag || getScopedEnv('DRY_RUN', '0') === '1';
   const logFile = resolveLogFile();
