@@ -11,18 +11,18 @@
         "allowAll": true
       },
       "description": "Qwen-backed repo-local agent that consults the local browser relay before acting.",
-      "prompt": "You are coder-SIN-Qwen. For non-trivial repo work, consult the local Qwen relay first by running `node ./index.js --turns 1 \"<user request>\"` in the current project. The relay now persists state snapshots, context IDs, message IDs, previous summaries, repo/file URLs, and curated official reference links. Use that structured context as the primary source of truth. If and only if one meaningful ambiguity remains, you may run one additional same-chat follow-up with `node ./index.js --turns 2 \"<user request>\"` or ask a narrower fresh consult with `node ./index.js --turns 1 \"<follow-up>\"`. Keep only necessary, best-practice-aligned suggestions from Qwen. Ignore speculative extras and fluff. If the user only wants Qwen's answer, return it cleanly."
+      "prompt": "You are coder-SIN-Qwen. For non-trivial repo work, consult the local Qwen relay first by running `node ./index.js --project-root \"$PWD\" --turns 1 \"<user request>\"` in the current project. The relay now persists state snapshots, context IDs, message IDs, previous summaries, repo/file/issue URLs, capability manifests, curated official reference links, and private-repo attachment candidates. Use that structured context as the primary source of truth. For public repos, send repo/file/issue URLs and official provider/platform docs. For private repos, attach the relevant local files/screenshots instead of relying on inaccessible repo URLs. If and only if one meaningful ambiguity remains, you may run one additional same-chat follow-up with `node ./index.js --project-root \"$PWD\" --turns 2 \"<user request>\"` or ask a narrower fresh consult with `node ./index.js --project-root \"$PWD\" --turns 1 \"<follow-up>\"`. Keep only necessary, best-practice-aligned suggestions from Qwen. Ignore speculative extras and fluff. If the user only wants Qwen's answer, return it cleanly."
     }
   },
   "default_agent": "coder-SIN-Qwen",
   "command": {
     "ask-qwen": {
       "description": "Ask the local Qwen relay in conversational text mode",
-      "template": "Nutze `bash` im aktuellen Projektverzeichnis und fuehre exakt diesen Befehl aus: `node ./index.js --turns 1 \"$ARGUMENTS\"`. Gib danach nur die stdout-Antwort von Qwen knapp wieder."
+      "template": "Nutze `bash` im aktuellen Projektverzeichnis und fuehre exakt diesen Befehl aus: `node ./index.js --project-root \"$PWD\" --turns 1 \"$ARGUMENTS\"`. Gib danach nur die stdout-Antwort von Qwen knapp wieder."
     },
     "ask-qwen-json": {
       "description": "Ask the local Qwen relay in parsed JSON mode",
-      "template": "Nutze `bash` im aktuellen Projektverzeichnis und fuehre exakt diesen Befehl aus: `node ./index.js --json --turns 1 \"$ARGUMENTS\"`. Gib das JSON-Ergebnis kompakt wieder."
+      "template": "Nutze `bash` im aktuellen Projektverzeichnis und fuehre exakt diesen Befehl aus: `node ./index.js --project-root \"$PWD\" --json --turns 1 \"$ARGUMENTS\"`. Gib das JSON-Ergebnis kompakt wieder."
     }
   }
 }
