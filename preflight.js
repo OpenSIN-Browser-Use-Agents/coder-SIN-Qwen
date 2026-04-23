@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
+import { buildCandidateCdpUrls } from './cdp-recovery.js';
 import { getScopedEnv } from './runtime-config.js';
 
 const execFileAsync = promisify(execFile);
@@ -29,7 +30,8 @@ export async function runPreflight() {
     },
     chromeConnection: {
       mode: launchConfig.mode,
-      cdpUrl: launchConfig.cdpUrl || ''
+      cdpUrl: launchConfig.cdpUrl || '',
+      candidates: buildCandidateCdpUrls(process.env)
     },
     chromeLock: lockState
   };
