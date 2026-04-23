@@ -58,6 +58,9 @@ export async function runQwenSession(input, options = {}) {
       const previousAssistantState = await getLastAssistantState(page);
       await ensureMaxPreviewSelected(page);
       await ensureThinkingModeSelected(page);
+      if (turn === 1 && typeof input === 'object') {
+        await maybeUploadContextAttachments(page, input);
+      }
       await enterPrompt(inputBox, currentPrompt);
       await submitPrompt(page, inputBox, currentPrompt, previousAssistantState);
       await waitForStreamingDone(page, previousAssistantState);
@@ -182,6 +185,9 @@ export function buildPromptPayload(context) {
 
   const files = Array.isArray(context.files) ? context.files : [];
   const fileReferences = Array.isArray(context.fileReferences) ? context.fileReferences : [];
+  const issueReferences = Array.isArray(context.issueReferences) ? context.issueReferences : [];
+  const attachmentCandidates = Array.isArray(context.attachmentCandidates) ? context.attachmentCandidates : [];
+  const capabilityManifest = Array.isArray(context.capabilityManifest) ? context.capabilityManifest : [];
   const references = Array.isArray(context.references) ? context.references : [];
   const stateSnapshot = context.stateSnapshot || null;
   const envelope = stateSnapshot?.stateSnapshot || null;
@@ -200,6 +206,7 @@ export function buildPromptPayload(context) {
     `- branch: ${context.repo?.branch || 'N/A'}`,
     `- head: ${context.repo?.head || 'N/A'}`,
     `- dirty: ${Boolean(context.repo?.dirty)}`,
+    `- visibility: ${context.repo?.visibility || 'N/A'}`,
     `- repo url: ${context.repo?.urls?.web || 'N/A'}`,
     `- commit url: ${context.repo?.urls?.commit || 'N/A'}`,
     '',
@@ -234,7 +241,16 @@ export function buildPromptPayload(context) {
     ...files.map((file) => `- ${file}`),
     '',
     'Relevant file URLs:',
-    ...fileReferences.map((file) => `- ${file.path}: ${file.url || 'N/A'}`),
+    ...fileReferences.map((file) => `- ${file.path}: ${file.url || 'private_repo_attachment'}`),
+    '',
+    'Issue URLs:',
+    ...issueReferences.map((issue) => `- ${issue.url}`),
+    '',
+    'Attachment files:',
+    ...attachmentCandidates.map((file) => `- ${file.path} (${file.reason}, ${file.size} bytes)`),
+    '',
+    'Capability manifest:',
+    ...capabilityManifest.map((capability) => `- ${capability.name}: ${capability.supported ? 'supported' : 'not supported'} (${capability.reason})`),
     '',
     'Reference URLs:',
     ...references.map((reference) => `- ${reference.label}: ${reference.url} (${reference.reason})`),
@@ -583,6 +599,18 @@ async function waitForThinkingModeSettled(page) {
   }, { timeout: 4000, polling: 150 }).catch(() => {});
   await page.waitForTimeout(300);
   return readCurrentThinkingMode(page);
+}
+
+async function maybeUploadContextAttachments(page, context) {
+  const attachments = Array.isArray(context?.attachmentCandidates) ? context.attachmentCandidates.slice(0, 10) : [];
+  if (!attachments.length) return { uploaded: false, count: 0 };
+
+  const fileInput = page.locator('#filesUpload').first();
+  if (!(await fileInput.count().catch(() => 0))) return { uploaded: false, count: 0 };
+
+  await fileInput.setInputFiles(attachments.map((file) => file.absolutePath)).catch(() => {});
+  await page.waitForTimeout(1200);
+  return { uploaded: true, count: attachments.length };
 }
 
 async function readCurrentModel(page) {

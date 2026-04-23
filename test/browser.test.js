@@ -21,6 +21,9 @@ test('builds prompt payload strings', () => {
     package: { name: 'demo', version: '1.0.0', scripts: ['test'], dependencies: ['playwright'] },
     files: ['index.js'],
     fileReferences: [{ path: 'index.js', url: 'https://github.com/example/repo/blob/abc123/index.js' }],
+    issueReferences: [{ url: 'https://github.com/example/repo/issues/12' }],
+    attachmentCandidates: [{ path: 'private.py', absolutePath: '/tmp/private.py', size: 42, reason: 'private_repo_context' }],
+    capabilityManifest: [{ name: 'private_file_attachments', supported: true, reason: 'Private repos can attach files.' }],
     references: [{ label: 'Playwright docs', url: 'https://playwright.dev/docs/intro', reason: 'Browser automation docs' }],
     stateSnapshot: {
       protocolVersion: 'A2A-v2.1-lite',
@@ -55,6 +58,11 @@ test('builds prompt payload strings', () => {
   assert.match(payload, /Decision history:/);
   assert.match(payload, /Previous decision\./);
   assert.match(payload, /Relevant file URLs:/);
+  assert.match(payload, /Issue URLs:/);
+  assert.match(payload, /github\.com\/example\/repo\/issues\/12/);
+  assert.match(payload, /Attachment files:/);
+  assert.match(payload, /private_repo_context/);
+  assert.match(payload, /Capability manifest:/);
   assert.match(payload, /Playwright docs: https:\/\/playwright.dev\/docs\/intro/);
   assert.match(payload, /Completion criteria:/);
 });
