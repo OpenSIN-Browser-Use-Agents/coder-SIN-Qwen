@@ -17,6 +17,7 @@
 - add a deterministic validator/critic pass that scores replies, flags violations, and strips fluff when appropriate
 - add `modul-qwen-autotraining` and `cli-autotraining.js` for Qwen-guided self-improvement snapshots and suggestions
 - add `lifecycle.js` for bounded graceful shutdown and resource cleanup across CLI/browser flows
+- enforce the Qwen thinking selector onto `Denken` / `Thinking` before each send
 
 ## 0.1.0
 

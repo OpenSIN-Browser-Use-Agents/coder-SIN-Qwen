@@ -46,6 +46,7 @@
 - Raw Qwen text is now the default CLI output; use `--json` only when machine-readable parsing is needed.
 - The live browser flow now auto-selects `Qwen3.6-Max-Preview` before the first prompt.
 - After each completed turn the relay re-asserts `Qwen3.6-Max-Preview` to keep the active chat visually pinned to the intended model.
+- Before each prompt send the relay now also enforces the thinking selector to `Denken` / `Thinking`.
 - Extra Qwen turns are opt-in only via `--turns 2+` and now stay in the same chat.
 - Repo-aware prompts now include repository URLs, relevant file URLs, and curated official reference URLs for the detected stack.
 - Repo-aware consults now persist `context_id`, `message_id`, and the latest compact summary in `.coder-sin-qwen-memory.json` (or `SIN_CODER_QWEN_MEMORY_FILE`).
