@@ -48,3 +48,18 @@ test('uses explicit projectRoot and private repo attachments', async () => {
 
   await fs.rm(tempDir, { recursive: true, force: true });
 });
+
+test('adds explicit evidence attachments even for public repos when screenshots/logs are requested', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'coder-sin-qwen-public-evidence-'));
+  await fs.writeFile(path.join(tempDir, 'package.json'), JSON.stringify({ name: 'worker-demo', version: '1.0.0' }), 'utf8');
+  await fs.writeFile(path.join(tempDir, 'worker.py'), 'print("hello")\n', 'utf8');
+  await fs.writeFile(path.join(tempDir, 'failure.log'), 'boom\n', 'utf8');
+  await fs.writeFile(path.join(tempDir, 'worker_screenshot.png'), 'png', 'utf8');
+
+  const context = await buildContext({ prompt: 'Send qwen all logs and screenshots for this issue', projectRoot: tempDir });
+  assert.ok(Array.isArray(context.attachmentCandidates));
+  assert.ok(context.attachmentCandidates.some((file) => file.path === 'failure.log'));
+  assert.ok(context.attachmentCandidates.some((file) => file.path === 'worker_screenshot.png'));
+
+  await fs.rm(tempDir, { recursive: true, force: true });
+});

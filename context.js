@@ -198,8 +198,12 @@ function buildFileReferences(files, prompt, blobBase, limit = 12) {
 }
 
 async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, limit = 10 }) {
-  if (repoVisibility === 'public') return [];
-  const ranked = rankRelevantFiles(files, prompt).slice(0, limit);
+  const forceEvidenceAttachments = /(screenshot|screenshots|image|images|bild|bilder|log|logs|trace|traces|upload|uploads|datei|dateien|attach|attachment|anhang|anhänge)/iu.test(String(prompt || ''));
+  if (repoVisibility === 'public' && !forceEvidenceAttachments) return [];
+
+  const ranked = rankRelevantFiles(files, prompt)
+    .filter((file) => forceEvidenceAttachments || !/\.(?:png|jpg|jpeg|webp|txt|log)$/u.test(file))
+    .slice(0, limit);
   const attachments = [];
 
   for (const relativePath of ranked) {
@@ -207,7 +211,12 @@ async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, l
     try {
       const stat = await fs.stat(absolutePath);
       if (!stat.isFile()) continue;
-      attachments.push({ path: relativePath, absolutePath, size: stat.size, reason: 'private_repo_context' });
+      attachments.push({
+        path: relativePath,
+        absolutePath,
+        size: stat.size,
+        reason: repoVisibility === 'public' ? 'explicit_evidence_attachment' : 'private_repo_context'
+      });
     } catch {
       // Ignore unreadable files.
     }
