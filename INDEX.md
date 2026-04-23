@@ -51,4 +51,4 @@
 
 ## OpenCode
 
-Use the repo-local `./.opencode/opencode.json` config for `/ask-qwen`, `/ask-qwen-json`, and the `coder-SIN-Qwen` agent entry.
+Use the repo-local `./.opencode/opencode.json` config for `/ask-qwen` and the `coder-SIN-Qwen` agent entry.

@@ -56,6 +56,6 @@
 - `lifecycle.js` now owns bounded graceful cleanup for registered resources such as browser sessions and CLI signal handling.
 - The parser still prefers the final assistant JSON payload over echoed prompt JSON from the page body.
 - Resolved milestones: `#1 Stabilize ask-qwen wrapper execution`, `#2 Support real multi-turn Qwen conversations`, `#3 Keep Max Preview pinned after each turn`.
-- The repo-local OpenCode config now defines `/ask-qwen`, `/ask-qwen-json`, and the `coder-SIN-Qwen` agent directly in `.opencode/opencode.json` so the shell wrapper is no longer required.
+- The repo-local OpenCode config now defines the canonical `/ask-qwen` command and the `coder-SIN-Qwen` agent directly in `.opencode/opencode.json` so the shell wrapper is no longer required.
 - The global OpenCode config now uses a portable launcher plus `--project-root "$PWD"`, so external repos do not accidentally send coder-SIN-Qwen's own repo context to Qwen.
 - The shared global launcher now auto-detects a reachable local CDP endpoint before attempting browser launch, preventing the profile-lock failure seen when Chrome is already running.
