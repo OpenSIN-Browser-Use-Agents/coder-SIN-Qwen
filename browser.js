@@ -58,9 +58,11 @@ export async function runQwenSession(input, options = {}) {
       const previousAssistantState = await getLastAssistantState(page);
       await ensureMaxPreviewSelected(page);
       await ensureThinkingModeSelected(page);
+      
       if (turn === 1 && typeof input === 'object') {
         await maybeUploadContextAttachments(page, input);
       }
+      
       await enterPrompt(inputBox, currentPrompt);
       await submitPrompt(page, inputBox, currentPrompt, previousAssistantState);
       await waitForStreamingDone(page, previousAssistantState);
@@ -521,103 +523,29 @@ async function ensureMaxPreviewSelected(page) {
     await page.waitForTimeout(1_000);
   }
 
-  const currentModel = await readCurrentModel(page);
-  if (!currentModel.includes('Qwen3.6-Max-Preview')) {
-    throw new Error(`Qwen model selection failed. Expected Qwen3.6-Max-Preview but found ${currentModel || 'unknown model'}.`);
-  }
-}
-
-async function maybeSelectThinkingMode(page) {
-  const result = { menuFound: false, optionFound: false, optionClicked: false, selector: '', currentMode: '' };
-  const currentMode = await readCurrentThinkingMode(page);
-  if (isThinkingMode(currentMode)) {
-    result.currentMode = currentMode;
-    return result;
-  }
-
-  for (const selector of SELECTORS.thinkingMenu) {
-    const trigger = page.locator(selector).first();
-    if (await trigger.count().catch(() => 0)) {
-      result.menuFound = true;
-      result.selector = selector;
-      await trigger.click({ force: true }).catch(() => {});
-      await page.waitForTimeout(800);
-      for (const optionSelector of SELECTORS.thinkingOption) {
-        const option = page.locator(optionSelector).first();
-        if (await option.count().catch(() => 0)) {
-          result.optionFound = true;
-          result.currentMode = await readCurrentThinkingMode(page);
-          // Prefer the visible selected-option row; the aria-only option node can exist but not react to force clicks.
-          await option.click({ force: true }).then(() => { result.optionClicked = true; }).catch(() => {});
-          const afterMode = await waitForThinkingModeSettled(page);
-          if (isThinkingMode(afterMode)) {
-            result.currentMode = afterMode;
-            return result;
-          }
-        }
-      }
-      return result;
+    const currentModel = await readCurrentModel(page);
+    if (!currentModel.includes('Qwen3.6-Max-Preview')) {
+      throw new Error(`Qwen model selection failed. Expected Qwen3.6-Max-Preview but found ${currentModel || 'unknown model'}.`);
     }
   }
-  return result;
-}
 
-async function ensureThinkingModeSelected(page) {
-  // Qwen can silently fall back from Denken/Thinking to Automatisch or Schnell; enforce Denken before each send.
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const currentMode = await readCurrentThinkingMode(page);
-    if (isThinkingMode(currentMode)) return;
-    await maybeSelectThinkingMode(page);
-    const afterMode = await waitForThinkingModeSettled(page);
-    if (isThinkingMode(afterMode)) return;
+  async function readCurrentModel(page) {
+    return page.locator('.index-module__model-selector-text___XvWe0').innerText().catch(() => '');
   }
 
-  const currentMode = await readCurrentThinkingMode(page);
-  if (!isThinkingMode(currentMode)) {
-    throw new Error(`Qwen thinking mode selection failed. Expected Denken/Thinking but found ${currentMode || 'unknown mode'}.`);
+  async function maybeUploadContextAttachments(page, context) {
+    const attachments = Array.isArray(context?.attachmentCandidates) ? context.attachmentCandidates.slice(0, 10) : [];
+    if (!attachments.length) return { uploaded: false, count: 0 };
+
+    const fileInput = page.locator('#filesUpload').first();
+    if (!(await fileInput.count().catch(() => 0))) return { uploaded: false, count: 0 };
+
+    await fileInput.setInputFiles(attachments.map((file) => file.absolutePath)).catch(() => {});
+    await page.waitForTimeout(1000);
+    return { uploaded: true, count: attachments.length };
   }
-}
 
-async function readCurrentThinkingMode(page) {
-  for (const selector of SELECTORS.thinkingMenu) {
-    const text = await page.locator(selector).first().innerText().catch(() => '');
-    const normalized = String(text || '').trim();
-    if (normalized) return normalized;
-  }
-  return '';
-}
-
-function isThinkingMode(mode) {
-  return /^(denken|thinking)$/iu.test(String(mode || '').trim());
-}
-
-async function waitForThinkingModeSettled(page) {
-  await page.waitForFunction(() => {
-    const label = document.querySelector('.qwen-select-thinking-label-text');
-    const text = String(label?.textContent || '').trim();
-    return /^(Denken|Thinking)$/iu.test(text);
-  }, { timeout: 4000, polling: 150 }).catch(() => {});
-  await page.waitForTimeout(300);
-  return readCurrentThinkingMode(page);
-}
-
-async function maybeUploadContextAttachments(page, context) {
-  const attachments = Array.isArray(context?.attachmentCandidates) ? context.attachmentCandidates.slice(0, 10) : [];
-  if (!attachments.length) return { uploaded: false, count: 0 };
-
-  const fileInput = page.locator('#filesUpload').first();
-  if (!(await fileInput.count().catch(() => 0))) return { uploaded: false, count: 0 };
-
-  await fileInput.setInputFiles(attachments.map((file) => file.absolutePath)).catch(() => {});
-  await page.waitForTimeout(1200);
-  return { uploaded: true, count: attachments.length };
-}
-
-async function readCurrentModel(page) {
-  return page.locator('.index-module__model-selector-text___XvWe0').innerText().catch(() => '');
-}
-
-async function findPromptInput(page) {
+  async function findPromptInput(page) {
   for (const selector of SELECTORS.promptInput) {
     const locator = page.locator(selector).first();
     if (await locator.count().catch(() => 0)) {

@@ -11,6 +11,7 @@ test('builds unique CDP candidate list from env', () => {
 
   assert.deepEqual(urls, [
     'http://127.0.0.1:9335',
-    'http://127.0.0.1:9222'
+    'http://127.0.0.1:9222',
+    'http://127.0.0.1:9444'
   ]);
 });
