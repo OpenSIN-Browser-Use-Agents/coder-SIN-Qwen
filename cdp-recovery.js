@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -38,7 +38,19 @@ export async function isReachableCdp(baseUrl) {
 
 export async function ensureReachableCdp({ repoRoot, env = process.env, timeoutMs = 20_000 } = {}) {
   const existing = await findReachableCdpUrl(env);
-  if (existing) return { ok: true, cdpUrl: existing, startedSidecar: false };
+  if (existing) {
+    if (isSidecarFallbackUrl(existing)) {
+      const sidecarUserDataDir = resolveSidecarUserDataDir(repoRoot, env);
+      return {
+        ok: true,
+        cdpUrl: existing,
+        startedSidecar: true,
+        sidecarUserDataDir,
+        profileDirectory: env.CHROME_PROFILE_DIRECTORY || 'Default'
+      };
+    }
+    return { ok: true, cdpUrl: existing, startedSidecar: false };
+  }
 
   if (!repoRoot) {
     return { ok: false, cdpUrl: '', startedSidecar: false, error: 'repoRoot is required to start sidecar recovery' };
@@ -48,7 +60,12 @@ export async function ensureReachableCdp({ repoRoot, env = process.env, timeoutM
   if (!started.ok) return { ok: false, cdpUrl: '', startedSidecar: false, error: started.error };
 
   const resolved = await waitForReachableCdp(buildCandidateCdpUrls(env), timeoutMs);
-  if (resolved) return { ok: true, cdpUrl: resolved, startedSidecar: true };
+  if (resolved) return { ok: true, cdpUrl: resolved, startedSidecar: true, sidecarUserDataDir: started.userDataDir, profileDirectory: started.profileDirectory };
+
+  // Even if CDP attach is not usable, the sidecar clone can still be launched directly as an isolated browser context.
+  if (started.userDataDir) {
+    return { ok: true, cdpUrl: '', startedSidecar: true, sidecarUserDataDir: started.userDataDir, profileDirectory: started.profileDirectory };
+  }
 
   return { ok: false, cdpUrl: '', startedSidecar: true, error: `No reachable CDP endpoint found after ${timeoutMs}ms` };
 }
@@ -70,8 +87,8 @@ async function startSidecar(repoRoot, env) {
       ...env,
       CHROME_REMOTE_DEBUGGING_PORT: env.CHROME_REMOTE_DEBUGGING_PORT || '9444'
     };
-    await launchSidecarDirectly(repoRoot, recoveryEnv, Number(env.CHROME_SIDECAR_START_TIMEOUT_MS || 25000));
-    return { ok: true };
+    const launched = await launchSidecarDirectly(repoRoot, recoveryEnv, Number(env.CHROME_SIDECAR_START_TIMEOUT_MS || 25000));
+    return { ok: true, ...launched };
   } catch (error) {
     return { ok: false, error: error?.message || String(error) };
   }
@@ -80,8 +97,8 @@ async function startSidecar(repoRoot, env) {
 async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
   const port = env.CHROME_REMOTE_DEBUGGING_PORT || '9444';
   const profileDirectory = env.CHROME_PROFILE_DIRECTORY || 'Default';
-  const sidecarRoot = env.CHROME_SIDECAR_ROOT || path.join(os.tmpdir(), 'coder-sin-qwen-sidecar');
-  const userDataDir = path.join(sidecarRoot, 'user-data');
+  const userDataDir = resolveSidecarUserDataDir(repoRoot, env);
+  const sidecarRoot = path.dirname(userDataDir);
   const profileDir = path.join(userDataDir, profileDirectory);
   await fs.rm(sidecarRoot, { recursive: true, force: true }).catch(() => {});
   await fs.mkdir(profileDir, { recursive: true });
@@ -105,6 +122,21 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
       'about:blank'
     ], repoRoot, env, timeoutMs);
   }
+
+  return {
+    userDataDir,
+    profileDirectory,
+    port
+  };
+}
+
+function resolveSidecarUserDataDir(repoRoot, env) {
+  const sidecarRoot = env.CHROME_SIDECAR_ROOT || path.join(os.tmpdir(), 'coder-sin-qwen-sidecar');
+  return path.join(sidecarRoot, 'user-data');
+}
+
+function isSidecarFallbackUrl(url) {
+  return /127\.0\.0\.1:9444$/u.test(String(url || ''));
 }
 
 function runSpawn(command, args, cwd, env, timeoutMs) {
@@ -132,4 +164,21 @@ function runSpawn(command, args, cwd, env, timeoutMs) {
 
 export function toFileUrl(filePath) {
   return pathToFileURL(filePath).href;
+}
+
+export function terminateChromeForUserDataDir(userDataDir) {
+  if (!userDataDir) return;
+  try {
+    const output = execFileSync('pgrep', ['-fal', 'Google Chrome'], { encoding: 'utf8' }).trim();
+    if (!output) return;
+    for (const line of output.split('\n')) {
+      if (!line.includes(userDataDir)) continue;
+      const pid = Number(line.trim().split(/\s+/u)[0]);
+      if (Number.isFinite(pid)) {
+        try { process.kill(pid, 'SIGTERM'); } catch {}
+      }
+    }
+  } catch {
+    // Ignore missing process-list tools.
+  }
 }
