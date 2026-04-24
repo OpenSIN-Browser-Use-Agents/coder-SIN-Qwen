@@ -1,4 +1,6 @@
+import fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -68,28 +70,57 @@ async function startSidecar(repoRoot, env) {
       ...env,
       CHROME_REMOTE_DEBUGGING_PORT: env.CHROME_REMOTE_DEBUGGING_PORT || '9444'
     };
-    await runNodeScript(path.join(repoRoot, 'scripts', 'start-cdp-sidecar.sh'), recoveryEnv, repoRoot, Number(env.CHROME_SIDECAR_START_TIMEOUT_MS || 25000));
+    await launchSidecarDirectly(repoRoot, recoveryEnv, Number(env.CHROME_SIDECAR_START_TIMEOUT_MS || 25000));
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error?.message || String(error) };
   }
 }
 
-function runNodeScript(scriptPath, env, cwd, timeoutMs) {
+async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
+  const port = env.CHROME_REMOTE_DEBUGGING_PORT || '9444';
+  const profileDirectory = env.CHROME_PROFILE_DIRECTORY || 'Default';
+  const sidecarRoot = env.CHROME_SIDECAR_ROOT || path.join(os.tmpdir(), 'coder-sin-qwen-sidecar');
+  const userDataDir = path.join(sidecarRoot, 'user-data');
+  const profileDir = path.join(userDataDir, profileDirectory);
+  await fs.rm(sidecarRoot, { recursive: true, force: true }).catch(() => {});
+  await fs.mkdir(profileDir, { recursive: true });
+
+  if (process.platform === 'darwin') {
+    await runSpawn('open', ['-na', 'Google Chrome', '--args',
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${userDataDir}`,
+      `--profile-directory=${profileDirectory}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      'about:blank'
+    ], repoRoot, env, timeoutMs);
+  } else {
+    await runSpawn('google-chrome', [
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${userDataDir}`,
+      `--profile-directory=${profileDirectory}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      'about:blank'
+    ], repoRoot, env, timeoutMs);
+  }
+}
+
+function runSpawn(command, args, cwd, env, timeoutMs) {
   return new Promise((resolve, reject) => {
-    const child = spawn('bash', [scriptPath], {
+    const child = spawn(command, args, {
       cwd,
       env,
       stdio: 'ignore'
     });
     const timeout = setTimeout(() => {
-      child.kill('SIGTERM');
-      reject(new Error(`sidecar launch timed out after ${timeoutMs}ms`));
+      resolve();
     }, timeoutMs);
     if (typeof timeout.unref === 'function') timeout.unref();
     child.on('exit', (code) => {
       clearTimeout(timeout);
-      if (code === 0) resolve();
+      if (code === 0 || process.platform === 'darwin') resolve();
       else reject(new Error(`sidecar launch exited with code ${code}`));
     });
     child.on('error', (error) => {

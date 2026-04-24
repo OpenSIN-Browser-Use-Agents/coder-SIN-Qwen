@@ -624,29 +624,101 @@ async function ensureMaxPreviewSelected(page) {
     await page.waitForTimeout(1_000);
   }
 
-    const currentModel = await readCurrentModel(page);
-    if (!currentModel.includes('Qwen3.6-Max-Preview')) {
-      throw new Error(`Qwen model selection failed. Expected Qwen3.6-Max-Preview but found ${currentModel || 'unknown model'}.`);
+  const currentModel = await readCurrentModel(page);
+  if (!currentModel.includes('Qwen3.6-Max-Preview')) {
+    throw new Error(`Qwen model selection failed. Expected Qwen3.6-Max-Preview but found ${currentModel || 'unknown model'}.`);
+  }
+}
+
+async function readCurrentModel(page) {
+  return page.locator('.index-module__model-selector-text___XvWe0').innerText().catch(() => '');
+}
+
+async function maybeSelectThinkingMode(page) {
+  const result = { menuFound: false, optionFound: false, optionClicked: false, selector: '', currentMode: '' };
+  const currentMode = await readCurrentThinkingMode(page);
+  if (isThinkingMode(currentMode)) {
+    result.currentMode = currentMode;
+    return result;
+  }
+
+  for (const selector of SELECTORS.thinkingMenu) {
+    const trigger = page.locator(selector).first();
+    if (await trigger.count().catch(() => 0)) {
+      result.menuFound = true;
+      result.selector = selector;
+      await trigger.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(800);
+      for (const optionSelector of SELECTORS.thinkingOption) {
+        const option = page.locator(optionSelector).first();
+        if (await option.count().catch(() => 0)) {
+          result.optionFound = true;
+          result.currentMode = await readCurrentThinkingMode(page);
+          await option.click({ force: true }).then(() => { result.optionClicked = true; }).catch(() => {});
+          const afterMode = await waitForThinkingModeSettled(page);
+          if (isThinkingMode(afterMode)) {
+            result.currentMode = afterMode;
+            return result;
+          }
+        }
+      }
+      return result;
     }
   }
+  return result;
+}
 
-  async function readCurrentModel(page) {
-    return page.locator('.index-module__model-selector-text___XvWe0').innerText().catch(() => '');
+async function ensureThinkingModeSelected(page) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const currentMode = await readCurrentThinkingMode(page);
+    if (isThinkingMode(currentMode)) return;
+    await maybeSelectThinkingMode(page);
+    const afterMode = await waitForThinkingModeSettled(page);
+    if (isThinkingMode(afterMode)) return;
   }
 
-  async function maybeUploadContextAttachments(page, context) {
-    const attachments = Array.isArray(context?.attachmentCandidates) ? context.attachmentCandidates.slice(0, 10) : [];
-    if (!attachments.length) return { uploaded: false, count: 0 };
-
-    const fileInput = page.locator('#filesUpload').first();
-    if (!(await fileInput.count().catch(() => 0))) return { uploaded: false, count: 0 };
-
-    await fileInput.setInputFiles(attachments.map((file) => file.absolutePath)).catch(() => {});
-    await page.waitForTimeout(1000);
-    return { uploaded: true, count: attachments.length };
+  const currentMode = await readCurrentThinkingMode(page);
+  if (!isThinkingMode(currentMode)) {
+    throw new Error(`Qwen thinking mode selection failed. Expected Denken/Thinking but found ${currentMode || 'unknown mode'}.`);
   }
+}
 
-  async function findPromptInput(page) {
+async function readCurrentThinkingMode(page) {
+  for (const selector of SELECTORS.thinkingMenu) {
+    const text = await page.locator(selector).first().innerText().catch(() => '');
+    const normalized = String(text || '').trim();
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+function isThinkingMode(mode) {
+  return /^(denken|thinking)$/iu.test(String(mode || '').trim());
+}
+
+async function waitForThinkingModeSettled(page) {
+  await page.waitForFunction(() => {
+    const label = document.querySelector('.qwen-select-thinking-label-text');
+    const text = String(label?.textContent || '').trim();
+    return /^(Denken|Thinking)$/iu.test(text);
+  }, { timeout: 4000, polling: 150 }).catch(() => {});
+  await page.waitForTimeout(300);
+  return readCurrentThinkingMode(page);
+}
+
+async function maybeUploadContextAttachments(page, context) {
+  const attachments = Array.isArray(context?.attachmentCandidates) ? context.attachmentCandidates.slice(0, 10) : [];
+  if (!attachments.length) return { uploaded: false, count: 0 };
+
+  const fileInput = page.locator('#filesUpload').first();
+  if (!(await fileInput.count().catch(() => 0))) return { uploaded: false, count: 0 };
+
+  await fileInput.setInputFiles(attachments.map((file) => file.absolutePath)).catch(() => {});
+  await page.waitForTimeout(1000);
+  return { uploaded: true, count: attachments.length };
+}
+
+async function findPromptInput(page) {
   for (const selector of SELECTORS.promptInput) {
     const locator = page.locator(selector).first();
     if (await locator.count().catch(() => 0)) {
@@ -663,7 +735,6 @@ async function ensureMaxPreviewSelected(page) {
 }
 
 async function enterPrompt(input, prompt) {
-  // Support both normal text fields and rich editable areas.
   const isTextField = await input.evaluate((node) => {
     const tag = node.tagName.toLowerCase();
     const className = String(node.className || '');
@@ -680,7 +751,6 @@ async function enterPrompt(input, prompt) {
 }
 
 async function submitPrompt(page, input, prompt, previousAssistantState = { count: 0, text: '' }) {
-  // Press Enter first because the current Qwen UI sends naturally from the focused text box.
   await page.waitForTimeout(150);
   await input.focus().catch(() => {});
 
@@ -697,7 +767,6 @@ async function submitPrompt(page, input, prompt, previousAssistantState = { coun
 
   if (await waitForSubmissionKickoff(page, input, prompt, previousAssistantState)) return;
 
-  // Fallback to the explicit send button if Enter did not submit.
   await page.waitForFunction((selectors) => selectors.some((selector) => Boolean(document.querySelector(selector))), SELECTORS.sendButton, { timeout: 5_000 }).catch(() => {});
   const sendButtons = page.locator('button.send-button');
   if (await sendButtons.count().catch(() => 0)) {
@@ -707,7 +776,6 @@ async function submitPrompt(page, input, prompt, previousAssistantState = { coun
 }
 
 async function waitForStreamingDone(page, previousAssistantState = { count: 0, text: '' }) {
-  // Wait for a NEW assistant message before checking whether streaming has finished.
   await page.waitForFunction(({ selectors, previous }) => {
     return selectors.some((selector) => {
       const elements = Array.from(document.querySelectorAll(selector));
@@ -722,21 +790,16 @@ async function waitForStreamingDone(page, previousAssistantState = { count: 0, t
 
   await page.waitForTimeout(2_000);
   await page.waitForFunction(() => {
-    const hasStopButton = Array.from(document.querySelectorAll('button'))
-      .some((button) => /^(stop|stopp)$/iu.test((button.textContent || '').trim()) || /stop-generation/iu.test(button.getAttribute('data-testid') || ''));
+    const hasStopButton = Array.from(document.querySelectorAll('button')).some((button) => /^(stop|stopp)$/iu.test((button.textContent || '').trim()) || /stop-generation/iu.test(button.getAttribute('data-testid') || ''));
     const busyNode = document.querySelector('[aria-busy="true"], .loading, .streaming, .typing-indicator, [data-testid="stop-generation"]');
-
     return !hasStopButton && !busyNode;
   }, { timeout: 300_000, polling: 1_000 }).catch(() => {});
 
-  // Qwen sometimes keeps appending text for a moment after the visible loading affordance disappears.
-  // Wait until the newest assistant message stops changing before we read it or start any follow-up work.
   await waitForAssistantTextToStabilize(page, previousAssistantState.text);
   await page.waitForTimeout(1_500);
 }
 
 async function waitForPromptReady(page) {
-  // Before sending a follow-up, wait until the composer is editable again.
   await page.waitForFunction(() => {
     const input = document.querySelector('textarea.message-input-textarea, textarea:not(.ime-text-area):not([readonly]), [contenteditable="true"], input[type="text"]');
     if (!input) return false;
@@ -747,7 +810,6 @@ async function waitForPromptReady(page) {
 }
 
 async function getLastAssistantText(page) {
-  // Read the newest assistant-like container and fall back to the page body when needed.
   for (const selector of SELECTORS.assistantOutput) {
     const locator = page.locator(selector).last();
     if (await locator.count().catch(() => 0)) {
@@ -755,7 +817,6 @@ async function getLastAssistantText(page) {
       if (text.trim()) return text.trim();
     }
   }
-
   return page.locator('body').innerText().catch(() => '');
 }
 
@@ -764,11 +825,9 @@ async function getLastAssistantState(page) {
     const locator = page.locator(selector);
     const count = await locator.count().catch(() => 0);
     if (!count) continue;
-
     const text = await locator.last().innerText().catch(() => '');
     return { count, text: text.trim() };
   }
-
   return { count: 0, text: '' };
 }
 
@@ -798,7 +857,6 @@ async function waitForAssistantTextToStabilize(page, previousText = '') {
 }
 
 async function waitForSubmissionKickoff(page, input, prompt, previousAssistantState) {
-  // Detect whether the prompt actually started sending before trying the fallback submit path.
   const expectedPrompt = String(prompt || '').trim();
 
   try {
