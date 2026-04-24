@@ -166,6 +166,8 @@ export CHROME_REMOTE_DEBUGGING_PORT="9222"
 
 In attach mode the repo reuses an existing blank tab when possible, keeps your Chrome session alive, and does not auto-close the attached tab afterward.
 
+If the recovered session lands on the Qwen auth page, the relay now detects that state and attempts the controlled Google-login fallback path (`Anmelden` → `Fortfahren mit Google` → account/continue selectors).
+
 ## CI / release
 
 - CI runs `npm test` and `npm run build`
