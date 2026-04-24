@@ -9,9 +9,9 @@ export function buildCandidateCdpUrls(env = process.env) {
     env.CHROME_CDP_URL || '',
     env.CHROME_REMOTE_DEBUGGING_PORT ? `http://127.0.0.1:${env.CHROME_REMOTE_DEBUGGING_PORT}` : '',
     env.WEBAUTO_CDP_PORT ? `http://127.0.0.1:${env.WEBAUTO_CDP_PORT}` : '',
-    'http://127.0.0.1:9444',
     'http://127.0.0.1:9335',
-    'http://127.0.0.1:9222'
+    'http://127.0.0.1:9222',
+    'http://127.0.0.1:9444'
   ].filter(Boolean);
 
   return [...new Set(urls)];

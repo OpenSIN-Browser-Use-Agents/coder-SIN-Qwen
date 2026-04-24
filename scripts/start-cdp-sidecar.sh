@@ -25,9 +25,11 @@ import shutil
 source_profile = Path(r'''$SOURCE_PROFILE''')
 profile_directory = r'''$PROFILE_DIRECTORY'''
 target_profile = Path(r'''$TARGET_PROFILE_DIR''')
+target_user_data_dir = Path(r'''$TARGET_USER_DATA_DIR''')
 sync_mode = r'''$SYNC_MODE'''
 
 source_dir = source_profile if source_profile.name in {'Default', profile_directory} else source_profile / profile_directory
+source_user_data_dir = source_dir.parent if source_dir.name in {'Default', profile_directory} else source_dir
 
 full_items = None
 minimal_items = [
@@ -55,6 +57,21 @@ else:
     items = minimal_items
 
 target_profile.mkdir(parents=True, exist_ok=True)
+
+for name in ('Local State', 'First Run', 'Last Version'):
+    src = source_user_data_dir / name
+    dst = target_user_data_dir / name
+    if not src.exists():
+        continue
+    if dst.exists():
+        if dst.is_dir():
+            shutil.rmtree(dst)
+        else:
+            dst.unlink()
+    if src.is_dir():
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+    else:
+        shutil.copy2(src, dst)
 
 for name in items:
     src = source_dir / name

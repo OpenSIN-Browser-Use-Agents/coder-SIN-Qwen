@@ -120,7 +120,13 @@ Live-run preparation:
 npm run live:prepare
 ```
 
-If you want a dedicated non-destructive debug sidecar instead of touching the main browser owner:
+Preferred path: attach to a debug-enabled **real Default profile** first.
+
+```bash
+export CHROME_CDP_URL="http://127.0.0.1:9335"
+```
+
+If that is unavailable, use a dedicated non-destructive sidecar instead of touching the main browser owner:
 
 ```bash
 export CHROME_REMOTE_DEBUGGING_PORT="9444"
@@ -130,7 +136,7 @@ export CHROME_CDP_URL="http://127.0.0.1:9444"
 
 By default the sidecar uses **no profile sync** for the fastest and least fragile recovery path. Set `CHROME_SIDECAR_SYNC_MODE=minimal` or `CHROME_SIDECAR_SYNC_MODE=full` only if you explicitly need copied profile state.
 
-The shared launcher now probes known local CDP endpoints first and, if none are reachable, can attempt to auto-start the repo sidecar on port `9444` before retrying attach. If that recovery path cannot produce a live CDP endpoint within the bounded startup window, the relay now fails fast with a clear message instead of silently falling back to a broken profile launch.
+The shared launcher now probes known local CDP endpoints first, preferring the classic Default-profile attach path on `9335`. Only if no attachable endpoint is reachable will it attempt the non-destructive sidecar fallback on `9444`. If that recovery path cannot produce a live CDP endpoint within the bounded startup window, the relay now fails fast with a clear message instead of silently falling back to a broken profile launch.
 
 ## Browser setup
 

@@ -9,5 +9,6 @@ coverage
 artifacts/
 .env.local
 .chrome-cdp-sidecar*/
+.chrome-auth-proof/
 .coder-sin-qwen-memory.json
 .coder-sin-qwen-autotraining.jsonl

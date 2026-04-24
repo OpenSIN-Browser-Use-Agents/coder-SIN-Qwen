@@ -23,6 +23,7 @@
 - make CDP recovery fail fast when no live endpoint can be established, instead of falling back to a broken locked-profile launch
 - make sidecar startup itself bounded and self-verifying so recovery does not hang indefinitely on about:blank launches
 - switch the recovery sidecar to a more reliable macOS `open -na` launch path and a cleaner default debug port (`9444`)
+- restore `9335` Default-profile attach as the preferred primary path, with `9444` sidecar kept as fallback only
 - detect unauthenticated Qwen auth pages and attempt a controlled Google-login fallback flow
 - prefer auto-attach to a reachable local CDP endpoint in the shared launcher to avoid Chrome profile-lock failures
 
