@@ -10,6 +10,10 @@ const QWEN_URL = 'https://chat.qwen.ai';
 // Centralized selector map so UI changes stay localized.
 export const SELECTORS = {
   newChat: ['.sidebar-entry-fixed-list-content', '.sidebar-entry-fixed-list-text', 'button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', 'text=Neue Unterhaltung', '[data-testid="new-chat"]'],
+  authEntry: ['.auth-button-ui.login', 'div:has-text("Anmelden")', 'button:has-text("Anmelden")', 'button:has-text("Loslegen")', 'button:has-text("Get started")'],
+  googleLogin: ['button:has-text("Fortfahren mit Google")', 'button:has-text("Continue with Google")', '.qwenchat-auth-pc-other-login-button:has-text("Google")'],
+  googleContinue: ['button:has-text("Weiter")', 'button:has-text("Continue")', 'button:has-text("Weiter als")'],
+  googleAccount: ['[data-identifier]', '[data-email]', 'div[role="link"][data-identifier]', 'li [data-identifier]'],
   modelMenu: ['header span.ant-dropdown-trigger', 'header .index-module__model-selector-text___XvWe0', 'span.ant-dropdown-trigger', 'button:has-text("Model")', 'button:has-text("Modell")', '[data-testid="model-selector"]'],
   thinkingMenu: ['.qwen-thinking-selector .ant-select-selector', '.qwen-thinking-selector [role="combobox"]', '.qwen-select-thinking-label', '.qwen-select-thinking-label-text'],
   thinkingOption: ['.ant-select-item-option[title="Denken"]', '[role="option"][aria-label="Denken"]', '.ant-select-item-option[title="Thinking"]', '[role="option"][aria-label="Thinking"]'],
@@ -41,6 +45,7 @@ export async function runQwenSession(input, options = {}) {
   try {
     await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await waitForStableUi(page);
+    page = await ensureQwenAuthenticated(page);
     await maybeStartNewChat(page);
     await maybeSelectModel(page);
     await ensureMaxPreviewSelected(page);
@@ -124,6 +129,7 @@ export async function runBrowserE2ECheck() {
   try {
     await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await waitForStableUi(page);
+    page = await ensureQwenAuthenticated(page);
     const artifactPaths = [];
     artifactPaths.push(await captureScreenshot(page, 'smoke-01-loaded'));
 
@@ -460,6 +466,101 @@ async function waitForStableUi(page) {
   // Give the app a short settle window before querying dynamic selectors.
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2_000);
+}
+
+async function ensureQwenAuthenticated(page) {
+  // Prefer already-authenticated sessions. Only enter the Google fallback flow when the page is clearly on auth UI.
+  if (await hasInteractiveChat(page)) return page;
+
+  const authVisible = await hasVisibleSelector(page, SELECTORS.authEntry) || /\/auth$/u.test(page.url());
+  if (!authVisible) return page;
+
+  await maybeEnterAuthPage(page);
+  await maybeLoginWithGoogle(page);
+  return waitForAuthenticatedChat(page);
+}
+
+async function hasInteractiveChat(page) {
+  const input = await findPromptInput(page);
+  return Boolean(input);
+}
+
+async function hasVisibleSelector(page, selectors) {
+  for (const selector of selectors) {
+    const locator = page.locator(selector).first();
+    if (await locator.count().catch(() => 0)) return true;
+  }
+  return false;
+}
+
+async function maybeEnterAuthPage(page) {
+  for (const selector of SELECTORS.authEntry) {
+    const locator = page.locator(selector).first();
+    if (await locator.count().catch(() => 0)) {
+      await locator.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(1500);
+      if (/\/auth$/u.test(page.url())) return;
+    }
+  }
+}
+
+async function maybeLoginWithGoogle(page) {
+  for (const selector of SELECTORS.googleLogin) {
+    const locator = page.locator(selector).first();
+    if (await locator.count().catch(() => 0)) {
+      const beforePages = new Set(page.context().pages());
+      await locator.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(2500);
+      const authPage = pickAuthPage(page, beforePages);
+      if (authPage) {
+        await handleGoogleAuthPage(authPage);
+      }
+      return;
+    }
+  }
+}
+
+function pickAuthPage(currentPage, beforePages) {
+  const pages = currentPage.context().pages();
+  const popup = pages.find((page) => !beforePages.has(page));
+  if (popup) return popup;
+  return pages.find((page) => /accounts\.google\.com|oauth|signin/iu.test(page.url())) || null;
+}
+
+async function handleGoogleAuthPage(page) {
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
+  await page.waitForTimeout(1500);
+
+  for (const selector of SELECTORS.googleAccount) {
+    const locator = page.locator(selector).first();
+    if (await locator.count().catch(() => 0)) {
+      await locator.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(1500);
+      break;
+    }
+  }
+
+  for (const selector of SELECTORS.googleContinue) {
+    const locator = page.locator(selector).first();
+    if (await locator.count().catch(() => 0)) {
+      await locator.click({ force: true }).catch(() => {});
+      await page.waitForTimeout(1500);
+      break;
+    }
+  }
+}
+
+async function waitForAuthenticatedChat(page) {
+  const started = Date.now();
+  while (Date.now() - started < 90_000) {
+    for (const candidate of page.context().pages()) {
+      if (!/chat\.qwen\.ai/iu.test(candidate.url())) continue;
+      await candidate.waitForTimeout(300);
+      if (await hasInteractiveChat(candidate)) return candidate;
+    }
+    await page.waitForTimeout(1000);
+  }
+  throw new Error('Qwen authentication did not complete; no interactive chat became available.');
 }
 
 async function maybeStartNewChat(page) {
