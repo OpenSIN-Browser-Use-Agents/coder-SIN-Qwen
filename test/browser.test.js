@@ -1,6 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildConversationFollowUpPrompt, buildPromptPayload, createBrowserSessionCloser, resolveChromeConnectionConfig, resolveChromeLaunchConfig, shouldContinueConversation, summarizeSelectorReport, withRetry } from '../browser.js';
+import { buildConversationFollowUpPrompt, buildPromptPayload, createBrowserSessionCloser, hasBlockingAuthOverlay, resolveChromeConnectionConfig, resolveChromeLaunchConfig, shouldContinueConversation, summarizeSelectorReport, withRetry } from '../browser.js';
+
+function createLocatorStub(visibleMap, selector) {
+  return {
+    first() {
+      return this;
+    },
+    async count() {
+      return visibleMap.has(selector) ? 1 : 0;
+    },
+    async isVisible() {
+      return Boolean(visibleMap.get(selector));
+    }
+  };
+}
+
+function createPageStub(visibleEntries = []) {
+  const visibleMap = new Map(visibleEntries);
+  return {
+    locator(selector) {
+      return createLocatorStub(visibleMap, selector);
+    }
+  };
+}
 
 test('builds prompt payload strings', () => {
   // Objects should become a normal readable operator message instead of a raw JSON blob.
@@ -159,4 +182,18 @@ test('closes attached browser connections without closing Chrome', async () => {
 
   await createBrowserSessionCloser(attached)();
   assert.equal(closed, 1);
+});
+
+test('detects blocking auth overlays before treating chat as ready', async () => {
+  const page = createPageStub([
+    ['text=Willkommen', true],
+    ['button:has-text("Registrieren")', true]
+  ]);
+
+  assert.equal(await hasBlockingAuthOverlay(page), true);
+});
+
+test('does not flag normal chat pages as blocking auth overlays', async () => {
+  const page = createPageStub();
+  assert.equal(await hasBlockingAuthOverlay(page), false);
 });

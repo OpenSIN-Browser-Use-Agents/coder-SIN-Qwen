@@ -13,6 +13,7 @@ const QWEN_URL = 'https://chat.qwen.ai';
 export const SELECTORS = {
   newChat: ['.sidebar-entry-fixed-list-content', '.sidebar-entry-fixed-list-text', 'button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', 'text=Neue Unterhaltung', '[data-testid="new-chat"]'],
   authEntry: ['.auth-button-ui.login', 'div:has-text("Anmelden")', 'button:has-text("Anmelden")', 'button:has-text("Loslegen")', 'button:has-text("Get started")'],
+  authOverlay: ['[role="dialog"]', 'text=Angemeldet bleiben', 'text=Stay signed in', 'text=Willkommen', 'text=Welcome', 'button:has-text("Registrieren")', 'button:has-text("Register")'],
   authEmail: ['input[type="email"]', 'input[name="email"]', 'input[autocomplete="email"]', 'input[placeholder*="email" i]', 'input[placeholder*="e-mail" i]', 'input[aria-label*="email" i]', 'input[type="text"]'],
   authPassword: ['input[type="password"]', 'input[name="password"]', 'input[autocomplete="current-password"]', 'input[placeholder*="password" i]', 'input[aria-label*="password" i]'],
   authSubmit: ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Weiter")', 'button:has-text("Continue")', 'button:has-text("Log in")', 'button:has-text("Sign in")', 'button:has-text("Anmelden")'],
@@ -145,7 +146,8 @@ export async function runBrowserE2ECheck() {
     const thinkingSelection = await maybeSelectThinkingMode(page);
     artifactPaths.push(await captureScreenshot(page, 'smoke-04-after-thinking'));
 
-    const inputFound = Boolean(await findPromptInput(page));
+    const authOverlayDetected = await hasBlockingAuthOverlay(page);
+    const inputFound = await hasInteractiveChat(page);
     artifactPaths.push(await captureScreenshot(page, 'smoke-05-input-check'));
 
     const selectorReport = await collectSelectorReport(page);
@@ -154,6 +156,7 @@ export async function runBrowserE2ECheck() {
       url: page.url(),
       title: await page.title().catch(() => ''),
       inputFound,
+      authOverlayDetected,
       newChat,
       modelSelection,
       thinkingSelection,
@@ -162,11 +165,20 @@ export async function runBrowserE2ECheck() {
       artifactPaths
     });
 
+    if (authOverlayDetected) {
+      throw new Error(`Blocking Qwen auth overlay detected during smoke check. [report=${reportPath}]`);
+    }
+
+    if (!inputFound) {
+      throw new Error(`Qwen prompt input is not interactable during smoke check. [report=${reportPath}]`);
+    }
+
     return {
       ok: true,
       url: page.url(),
       title: await page.title().catch(() => ''),
       inputFound,
+      authOverlayDetected,
       profilePath: connectionConfig.profilePath,
       userDataDir: connectionConfig.userDataDir,
       profileDirectory: connectionConfig.profileDirectory,
@@ -471,15 +483,30 @@ async function ensureQwenAuthenticated(page) {
 
 async function hasInteractiveChat(page) {
   const input = await findPromptInput(page);
-  return Boolean(input);
+  if (!input) return false;
+  if (await hasBlockingAuthOverlay(page)) return false;
+  return true;
 }
 
 async function hasVisibleSelector(page, selectors) {
   for (const selector of selectors) {
     const locator = page.locator(selector).first();
-    if (await locator.count().catch(() => 0)) return true;
+    if (!(await locator.count().catch(() => 0))) continue;
+    if (await locator.isVisible().catch(() => false)) return true;
   }
   return false;
+}
+
+export async function hasBlockingAuthOverlay(page) {
+  const dialogVisible = await hasVisibleSelector(page, ['[role="dialog"]']);
+  if (dialogVisible) return true;
+
+  const staySignedInVisible = await hasVisibleSelector(page, ['text=Angemeldet bleiben', 'text=Stay signed in']);
+  if (staySignedInVisible) return true;
+
+  const welcomeVisible = await hasVisibleSelector(page, ['text=Willkommen', 'text=Welcome']);
+  const registerVisible = await hasVisibleSelector(page, ['button:has-text("Registrieren")', 'button:has-text("Register")']);
+  return welcomeVisible && registerVisible;
 }
 
 async function maybeEnterAuthPage(page) {
@@ -778,14 +805,16 @@ async function maybeUploadContextAttachments(page, context) {
 async function findPromptInput(page) {
   for (const selector of SELECTORS.promptInput) {
     const locator = page.locator(selector).first();
-    if (await locator.count().catch(() => 0)) {
-      const editable = await locator.evaluate((node) => {
-        const tag = node.tagName.toLowerCase();
-        const className = String(node.className || '');
-        return tag !== 'textarea' || (!className.includes('ime-text-area') && !node.readOnly && !node.hasAttribute('readonly'));
-      }).catch(() => false);
-      if (editable) return locator;
-    }
+    if (!(await locator.count().catch(() => 0))) continue;
+    if (!(await locator.isVisible().catch(() => false))) continue;
+    const enabled = await locator.isEnabled().catch(() => true);
+    if (!enabled) continue;
+    const editable = await locator.isEditable().catch(async () => locator.evaluate((node) => {
+      const tag = node.tagName.toLowerCase();
+      const className = String(node.className || '');
+      return tag !== 'textarea' || (!className.includes('ime-text-area') && !node.readOnly && !node.hasAttribute('readonly'));
+    }).catch(() => false));
+    if (editable) return locator;
   }
 
   return null;
