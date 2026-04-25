@@ -11,12 +11,23 @@ PROFILE_DIRECTORY="${CHROME_PROFILE_DIRECTORY:-auto}"
 SIDECAR_ROOT="${CHROME_SIDECAR_ROOT:-${TMPDIR:-/tmp}/coder-sin-qwen-sidecar}"
 TARGET_USER_DATA_DIR="$SIDECAR_ROOT/user-data"
 SYNC_MODE="${CHROME_SIDECAR_SYNC_MODE:-full}"
-CHROME_BIN="${CHROME_BIN:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
+if [[ -z "${CHROME_BIN:-}" ]]; then
+  if [[ "$OSTYPE" == darwin* ]]; then
+    CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  else
+    CHROME_BIN="google-chrome"
+  fi
+fi
 SIDECAR_LOG="${CHROME_SIDECAR_LOG:-$SIDECAR_ROOT/chrome-sidecar.log}"
 START_TIMEOUT_SECONDS="${CHROME_SIDECAR_START_TIMEOUT_SECONDS:-20}"
 SELECTED_PROFILE_FILE="$SIDECAR_ROOT/selected-profile.txt"
 
 mkdir -p "$TARGET_USER_DATA_DIR"
+
+if [[ ! -x "$CHROME_BIN" ]] && ! command -v "$CHROME_BIN" >/dev/null 2>&1; then
+  echo "Chrome binary not found: $CHROME_BIN"
+  exit 1
+fi
 
 # Python copy keeps the script portable and avoids rsync edge-cases on some systems.
 python3 - <<PY
@@ -133,23 +144,15 @@ if [[ -f "$SELECTED_PROFILE_FILE" ]]; then
   PROFILE_DIRECTORY="$(cat "$SELECTED_PROFILE_FILE")"
 fi
 
-if [[ "$OSTYPE" == darwin* ]]; then
-  nohup open -na "Google Chrome" --args \
-    --remote-debugging-port="$PORT" \
-    --user-data-dir="$TARGET_USER_DATA_DIR" \
-    --profile-directory="$PROFILE_DIRECTORY" \
-    --no-first-run \
-    --no-default-browser-check \
-    "$START_URL" >>"$SIDECAR_LOG" 2>&1 &
-else
-  nohup google-chrome \
-    --remote-debugging-port="$PORT" \
-    --user-data-dir="$TARGET_USER_DATA_DIR" \
-    --profile-directory="$PROFILE_DIRECTORY" \
-    --no-first-run \
-    --no-default-browser-check \
-    "$START_URL" >>"$SIDECAR_LOG" 2>&1 &
-fi
+nohup "$CHROME_BIN" \
+  --remote-debugging-port="$PORT" \
+  --user-data-dir="$TARGET_USER_DATA_DIR" \
+  --profile-directory="$PROFILE_DIRECTORY" \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-session-crashed-bubble \
+  --disable-features=SessionRestore,RestoreBackgroundContents \
+  "$START_URL" >>"$SIDECAR_LOG" 2>&1 &
 
 echo "CDP sidecar launch requested."
 echo "Export this before live runs:"
