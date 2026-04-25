@@ -33,6 +33,7 @@ fi
 python3 - <<PY
 from pathlib import Path
 import shutil
+import json
 
 source_profile = Path(r'''$SOURCE_PROFILE''')
 profile_directory = r'''$PROFILE_DIRECTORY'''
@@ -134,6 +135,22 @@ for name in items:
         shutil.copytree(src, dst, dirs_exist_ok=True)
     else:
         shutil.copy2(src, dst)
+
+preferences = target_profile / 'Preferences'
+try:
+    prefs = json.loads(preferences.read_text(encoding='utf-8')) if preferences.exists() else {}
+except json.JSONDecodeError:
+    prefs = {}
+
+if not isinstance(prefs.get('session'), dict):
+    prefs['session'] = {}
+
+prefs['session']['restore_on_startup'] = 4
+prefs['session']['startup_urls'] = [r'''$START_URL''']
+prefs['homepage'] = r'''$START_URL'''
+prefs['homepage_is_newtabpage'] = False
+
+preferences.write_text(json.dumps(prefs, indent=2) + '\n', encoding='utf-8')
 
 print(f'Prepared sidecar profile: {target_profile}')
 PY
