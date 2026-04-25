@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Push selected repo settings into Infisical when the operator explicitly allows it.
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { checkSecrets, loadEnvFile, loadSecretsSpec } from './secrets-check.js';
 
@@ -15,14 +18,24 @@ export function pushSecrets(entries, options = {}) {
   const envName = options.envName || process.env.INFISICAL_ENV_NAME || 'dev';
   const secretPath = options.secretPath || process.env.INFISICAL_SECRET_PATH || '/';
   const projectId = options.projectId || process.env.INFISICAL_PROJECT_ID || '';
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coder-sin-qwen-secrets-'));
+  const envFile = path.join(tempDir, '.infisical-push.env');
 
-  for (const [name, value] of entries) {
-    const args = ['secrets', 'set', `${name}=${value}`, '--env', envName, '--path', secretPath, '--silent'];
+  try {
+    const payload = entries
+      .map(([name, value]) => `${name}=${JSON.stringify(String(value))}`)
+      .join('\n');
+
+    fs.writeFileSync(envFile, `${payload}\n`, { encoding: 'utf8', mode: 0o600 });
+
+    const args = ['secrets', 'set', '--file', envFile, '--env', envName, '--path', secretPath, '--silent'];
     if (projectId) args.push('--projectId', projectId);
 
     execFileSync('infisical', args, {
       stdio: 'inherit'
     });
+  } finally {
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
   }
 }
 

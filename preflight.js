@@ -16,6 +16,9 @@ export async function runPreflight() {
   const nodeMajor = Number(process.versions.node.split('.')[0] || 0);
   const requireProfile = getScopedEnv('REQUIRE_PROFILE', '0') === '1' || (!process.env.CI && getScopedEnv('DRY_RUN', '0') !== '1');
   const lockState = detectChromeProfileLock(launchConfig);
+  const allowedSidecarUrl = `http://127.0.0.1:${process.env.CHROME_REMOTE_DEBUGGING_PORT || '9444'}`;
+  const configuredAttachUrl = String(process.env.CHROME_CDP_URL || '').trim();
+  const connectionPolicyOk = !configuredAttachUrl || configuredAttachUrl === allowedSidecarUrl;
   const checks = {
     node: { ok: nodeMajor >= 20, version: process.versions.node },
     git: await commandStatus('git', ['--version']),
@@ -31,13 +34,16 @@ export async function runPreflight() {
     chromeConnection: {
       mode: launchConfig.mode,
       cdpUrl: launchConfig.cdpUrl || '',
-      candidates: buildCandidateCdpUrls(process.env)
+      candidates: buildCandidateCdpUrls(process.env),
+      allowedSidecarUrl,
+      policyOk: connectionPolicyOk,
+      policyMessage: connectionPolicyOk ? '' : `CHROME_CDP_URL must match the prepared sidecar endpoint (${allowedSidecarUrl}).`
     },
     chromeLock: lockState
   };
 
   return {
-    ok: checks.node.ok && checks.git.ok && checks.chromeProfile.ok,
+    ok: checks.node.ok && checks.git.ok && checks.chromeProfile.ok && checks.chromeConnection.policyOk,
     ...checks
   };
 }
