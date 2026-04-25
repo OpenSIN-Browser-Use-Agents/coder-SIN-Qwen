@@ -25,7 +25,7 @@
 - make sidecar startup itself bounded and self-verifying so recovery does not hang indefinitely on blank launches
 - switch the recovery sidecar to a direct Chrome binary launch path with cloned startup URLs, crash-restore suppression, and a cleaner default debug port (`9444`)
 - add `--disable-search-engine-choice-screen` to Chrome launch paths to keep startup deterministic on newer builds
-- restore `9335` Default-profile attach as the preferred primary path, with `9444` sidecar kept as fallback only
+- enforce the sidecar CDP attach path as the only supported runtime browser path
 - prefer direct email/password Qwen auth with Infisical-backed account rotation only
 - prefer auto-attach to a reachable local CDP endpoint in the shared launcher to avoid Chrome profile-lock failures
 

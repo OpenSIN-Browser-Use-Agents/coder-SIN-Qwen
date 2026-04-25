@@ -61,7 +61,7 @@
 - The repo-local OpenCode config now defines the canonical `/ask-qwen` command and the `coder-SIN-Qwen` agent directly in `.opencode/opencode.json` so the shell wrapper is no longer required.
 - The global OpenCode config now uses a portable launcher plus `--project-root "$PWD"`, so external repos do not accidentally send coder-SIN-Qwen's own repo context to Qwen.
 - The shared global launcher now auto-detects a reachable local CDP endpoint before attempting browser launch, preventing the profile-lock failure seen when Chrome is already running.
-- The preferred attach order is now the real Default-profile path on `9335` first, with the `9444` sidecar kept only as a fallback.
+- The only allowed attach order is the prepared sidecar CDP endpoint on `9444` (or the configured sidecar port).
 - The sidecar recovery launch now uses the Chrome binary directly, seeds the cloned profile's startup URLs, suppresses crash-restore behavior, and opens the configured Qwen URL directly so fallback windows land in chat immediately.
 - The Chrome launch args now also suppress the search-engine-choice screen so startup stays deterministic on recent Chrome builds.
 - The only allowed browser path is the fallback sidecar CDP attach; the relay prepares it automatically and keeps the browser open.
