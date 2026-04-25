@@ -1,11 +1,32 @@
 import fs from 'node:fs/promises';
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
 
 const DEFAULT_QWEN_URL = 'https://chat.qwen.ai';
+const BLOCKED_SIDECAR_ITEMS = new Set([
+  'Cookies',
+  'Cookies-journal',
+  'Network',
+  'Login Data',
+  'Login Data For Account',
+  'Login Data-journal',
+  'Login Data For Account-journal',
+  'Web Data',
+  'Web Data-journal',
+  'Safe Browsing',
+  'Safe Browsing Cookies',
+  'Safe Browsing Cookies-journal',
+  'IndexedDB',
+  'Local Storage',
+  'Session Storage',
+  'Storage',
+  'Service Worker',
+  'Sessions',
+  'Local State'
+]);
 
 export function resolveStartupUrl(env = process.env) {
   return String(env.QWEN_URL || DEFAULT_QWEN_URL).trim() || DEFAULT_QWEN_URL;
@@ -20,13 +41,10 @@ export function resolveChromeBinaryPath(env = process.env, platform = process.pl
 }
 
 export function buildCandidateCdpUrls(env = process.env) {
+  const sidecarPort = String(env.CHROME_REMOTE_DEBUGGING_PORT || '9444').trim() || '9444';
   const urls = [
     env.CHROME_CDP_URL || '',
-    env.CHROME_REMOTE_DEBUGGING_PORT ? `http://127.0.0.1:${env.CHROME_REMOTE_DEBUGGING_PORT}` : '',
-    env.WEBAUTO_CDP_PORT ? `http://127.0.0.1:${env.WEBAUTO_CDP_PORT}` : '',
-    'http://127.0.0.1:9335',
-    'http://127.0.0.1:9222',
-    'http://127.0.0.1:9444'
+    `http://127.0.0.1:${sidecarPort}`
   ].filter(Boolean);
 
   return [...new Set(urls)];
@@ -108,7 +126,7 @@ async function startSidecar(repoRoot, env) {
       ...env,
       CHROME_REMOTE_DEBUGGING_PORT: env.CHROME_REMOTE_DEBUGGING_PORT || '9444',
       CHROME_PROFILE_DIRECTORY: profileDirectory,
-      CHROME_SIDECAR_SYNC_MODE: env.CHROME_SIDECAR_SYNC_MODE || 'full'
+      CHROME_SIDECAR_SYNC_MODE: env.CHROME_SIDECAR_SYNC_MODE || 'none'
     };
     const launched = await launchSidecarDirectly(repoRoot, recoveryEnv, Number(env.CHROME_SIDECAR_START_TIMEOUT_MS || 25000));
     return { ok: true, ...launched };
@@ -125,16 +143,20 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
   const sidecarRoot = path.dirname(userDataDir);
   const profileDir = path.join(userDataDir, profileDirectory);
   await fs.rm(sidecarRoot, { recursive: true, force: true }).catch(() => {});
-  await fs.mkdir(profileDir, { recursive: true });
+  await fs.mkdir(profileDir, { recursive: true, mode: 0o700 });
+  await fs.chmod(sidecarRoot, 0o700).catch(() => {});
+  await fs.chmod(userDataDir, 0o700).catch(() => {});
+  await fs.chmod(profileDir, 0o700).catch(() => {});
 
   await cloneChromeProfileState({
     sourceProfile: env.CHROME_PROFILE || defaultChromeUserDataDir(),
     profileDirectory,
     userDataDir,
     profileDir,
-    syncMode: env.CHROME_SIDECAR_SYNC_MODE || 'minimal',
+    syncMode: env.CHROME_SIDECAR_SYNC_MODE || 'none',
     startupUrl
   });
+  await assertNoSensitiveSidecarArtifacts(userDataDir, profileDir);
 
   await runSpawn(resolveChromeBinaryPath(env), [
     `--remote-debugging-port=${port}`,
@@ -170,24 +192,10 @@ async function cloneChromeProfileState({ sourceProfile, profileDirectory, userDa
     return;
   }
 
-  const rootItems = ['Local State', 'First Run', 'Last Version'];
+  const rootItems = ['First Run', 'Last Version'];
   const minimalItems = [
     'Preferences',
-    'Secure Preferences',
-    'Cookies',
-    'Cookies-journal',
-    'IndexedDB',
-    'Session Storage',
-    'Local Storage',
-    'Sessions',
-    'Login Data',
-    'Login Data For Account',
-    'Login Data-journal',
-    'Login Data For Account-journal',
-    'Service Worker',
-    'Storage',
-    'Web Data',
-    'Web Data-journal'
+    'Secure Preferences'
   ];
 
   for (const name of rootItems) {
@@ -203,6 +211,7 @@ async function cloneChromeProfileState({ sourceProfile, profileDirectory, userDa
   }
 
   await seedChromeStartupPreferences(profileDir, startupUrl);
+  await assertNoSensitiveSidecarArtifacts(userDataDir, profileDir);
 }
 
 export async function seedChromeStartupPreferences(profileDir, startupUrl) {
@@ -233,7 +242,23 @@ async function listCopyableItems(sourceProfileDir) {
   const entries = await fs.readdir(sourceProfileDir, { withFileTypes: true });
   return entries
     .map((entry) => entry.name)
-    .filter((name) => !['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'RunningChromeVersion', 'Crashpad', 'GPUCache', 'GrShaderCache', 'ShaderCache', 'Code Cache', 'DawnCache', 'Visited Links', 'chrome_debug.log'].includes(name));
+    .filter((name) => !['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'RunningChromeVersion', 'Crashpad', 'GPUCache', 'GrShaderCache', 'ShaderCache', 'Code Cache', 'DawnCache', 'Visited Links', 'chrome_debug.log'].includes(name))
+    .filter((name) => !BLOCKED_SIDECAR_ITEMS.has(name));
+}
+
+async function assertNoSensitiveSidecarArtifacts(userDataDir, profileDir) {
+  const candidates = [userDataDir, profileDir];
+  for (const baseDir of candidates) {
+    for (const name of BLOCKED_SIDECAR_ITEMS) {
+      try {
+        await fs.stat(path.join(baseDir, name));
+        throw new Error(`Blocked sidecar artifact detected: ${path.join(baseDir, name)}`);
+      } catch (error) {
+        if (error?.code === 'ENOENT') continue;
+        throw error;
+      }
+    }
+  }
 }
 
 async function copyIfExists(source, destination) {

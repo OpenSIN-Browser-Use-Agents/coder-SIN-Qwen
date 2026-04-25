@@ -7,14 +7,11 @@ import { buildCandidateCdpUrls, resolveChromeBinaryPath, resolveStartupUrl, seed
 
 test('builds unique CDP candidate list from env', () => {
   const urls = buildCandidateCdpUrls({
-    CHROME_CDP_URL: 'http://127.0.0.1:9335',
-    CHROME_REMOTE_DEBUGGING_PORT: '9222',
-    WEBAUTO_CDP_PORT: '9335'
+    CHROME_CDP_URL: 'http://127.0.0.1:9444',
+    CHROME_REMOTE_DEBUGGING_PORT: '9444'
   });
 
   assert.deepEqual(urls, [
-    'http://127.0.0.1:9335',
-    'http://127.0.0.1:9222',
     'http://127.0.0.1:9444'
   ]);
 });

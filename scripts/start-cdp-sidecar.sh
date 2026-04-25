@@ -10,7 +10,7 @@ SOURCE_PROFILE="${CHROME_PROFILE:-$HOME/Library/Application Support/Google/Chrom
 PROFILE_DIRECTORY="${CHROME_PROFILE_DIRECTORY:-auto}"
 SIDECAR_ROOT="${CHROME_SIDECAR_ROOT:-${TMPDIR:-/tmp}/coder-sin-qwen-sidecar}"
 TARGET_USER_DATA_DIR="$SIDECAR_ROOT/user-data"
-SYNC_MODE="${CHROME_SIDECAR_SYNC_MODE:-full}"
+SYNC_MODE="${CHROME_SIDECAR_SYNC_MODE:-none}"
 if [[ -z "${CHROME_BIN:-}" ]]; then
   if [[ "$OSTYPE" == darwin* ]]; then
     CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -23,6 +23,7 @@ START_TIMEOUT_SECONDS="${CHROME_SIDECAR_START_TIMEOUT_SECONDS:-20}"
 SELECTED_PROFILE_FILE="$SIDECAR_ROOT/selected-profile.txt"
 
 mkdir -p "$TARGET_USER_DATA_DIR"
+chmod 700 "$SIDECAR_ROOT" "$TARGET_USER_DATA_DIR" 2>/dev/null || true
 
 if [[ ! -x "$CHROME_BIN" ]] && ! command -v "$CHROME_BIN" >/dev/null 2>&1; then
   echo "Chrome binary not found: $CHROME_BIN"
@@ -34,6 +35,7 @@ python3 - <<PY
 from pathlib import Path
 import shutil
 import json
+import sys
 
 source_profile = Path(r'''$SOURCE_PROFILE''')
 profile_directory = r'''$PROFILE_DIRECTORY'''
@@ -74,22 +76,14 @@ target_profile = target_user_data_dir / profile_directory
 full_items = None
 minimal_items = [
     'Preferences',
-    'Secure Preferences',
-    'Cookies',
-    'Cookies-journal',
-    'IndexedDB',
-    'Session Storage',
-    'Local Storage',
-    'Sessions',
-    'Login Data',
-    'Login Data For Account',
-    'Login Data-journal',
-    'Login Data For Account-journal',
-    'Service Worker',
-    'Storage',
-    'Web Data',
-    'Web Data-journal'
+    'Secure Preferences'
 ]
+blocked_items = {
+    'Cookies', 'Cookies-journal', 'Network', 'Login Data', 'Login Data For Account',
+    'Login Data-journal', 'Login Data For Account-journal', 'Web Data', 'Web Data-journal',
+    'Safe Browsing', 'Safe Browsing Cookies', 'Safe Browsing Cookies-journal', 'IndexedDB',
+    'Local Storage', 'Session Storage', 'Storage', 'Service Worker', 'Sessions', 'Local State'
+}
 
 if not source_dir.exists():
     raise SystemExit(f'Source profile not found: {source_dir}')
@@ -100,13 +94,13 @@ elif sync_mode == 'full':
     items = [p.name for p in source_dir.iterdir() if p.name not in {
         'SingletonLock', 'SingletonCookie', 'SingletonSocket', 'Crashpad',
         'Code Cache', 'GPUCache', 'ShaderCache', 'DawnCache', 'Cache'
-    }]
+    } and p.name not in blocked_items]
 else:
     items = minimal_items
 
 target_profile.mkdir(parents=True, exist_ok=True)
 
-for name in ('Local State', 'First Run', 'Last Version'):
+for name in ('First Run', 'Last Version'):
     src = source_user_data_dir / name
     dst = target_user_data_dir / name
     if not src.exists():
@@ -122,6 +116,8 @@ for name in ('Local State', 'First Run', 'Last Version'):
         shutil.copy2(src, dst)
 
 for name in items:
+    if name in blocked_items:
+        continue
     src = source_dir / name
     dst = target_profile / name
     if not src.exists():
@@ -152,8 +148,16 @@ prefs['homepage_is_newtabpage'] = False
 
 preferences.write_text(json.dumps(prefs, indent=2) + '\n', encoding='utf-8')
 
+for base in (target_user_data_dir, target_profile):
+    for blocked in blocked_items:
+        if (base / blocked).exists():
+            print(f'Blocked sidecar artifact detected: {base / blocked}', file=sys.stderr)
+            sys.exit(1)
+
 print(f'Prepared sidecar profile: {target_profile}')
 PY
+
+chmod 700 "$SIDECAR_ROOT" "$TARGET_USER_DATA_DIR" "$TARGET_USER_DATA_DIR/$PROFILE_DIRECTORY" 2>/dev/null || true
 
 mkdir -p "$(dirname "$SIDECAR_LOG")"
 
