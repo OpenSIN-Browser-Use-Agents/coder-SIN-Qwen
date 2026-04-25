@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildConversationFollowUpPrompt, buildPromptPayload, createBrowserSessionCloser, hasBlockingAuthOverlay, resolveChromeConnectionConfig, resolveChromeLaunchConfig, shouldContinueConversation, summarizeSelectorReport, withRetry } from '../browser.js';
+import { buildConversationFollowUpPrompt, buildPromptPayload, createBrowserSessionCloser, ensureChromiumCdpCompatibility, getQwenSessionMarker, hasBlockingAuthOverlay, isQwenSessionBinding, looksLikeQwenRateLimit, resolveChromeConnectionConfig, resolveChromeLaunchConfig, resolveChromeProfileCheck, resolvePromptUrlBudget, resolveQwenSessionId, sanitizePromptForBrowser, shouldContinueConversation, shouldRequireChromeProfilePath, summarizeSelectorReport, withRetry } from '../browser.js';
 
 function createLocatorStub(visibleMap, selector) {
   return {
@@ -28,6 +28,10 @@ function createPageStub(visibleEntries = []) {
 test('builds prompt payload strings', () => {
   // Objects should become a normal readable operator message instead of a raw JSON blob.
   assert.equal(buildPromptPayload('hello'), 'hello');
+  const simplePayload = buildPromptPayload({ prompt: 'Say hello', mode: 'simple' });
+  assert.match(simplePayload, /Task:\nSay hello/);
+  assert.match(simplePayload, /OUTPUT REQUIREMENTS:/);
+  assert.ok(!simplePayload.includes('cwd:'));
   const payload = buildPromptPayload({
     prompt: 'Check the repo',
     repo: {
@@ -36,6 +40,7 @@ test('builds prompt payload strings', () => {
       branch: 'main',
       head: 'abc123',
       dirty: false,
+      visibility: 'public',
       urls: {
         web: 'https://github.com/example/repo',
         commit: 'https://github.com/example/repo/commit/abc123'
@@ -46,7 +51,10 @@ test('builds prompt payload strings', () => {
     fileReferences: [{ path: 'index.js', url: 'https://github.com/example/repo/blob/abc123/index.js' }],
     issueReferences: [{ url: 'https://github.com/example/repo/issues/12' }],
     attachmentCandidates: [{ path: 'private.py', absolutePath: '/tmp/private.py', size: 42, reason: 'private_repo_context' }],
-    capabilityManifest: [{ name: 'private_file_attachments', supported: true, reason: 'Private repos can attach files.' }],
+    capabilityManifest: [
+      { name: 'private_file_attachments', supported: true, reason: 'Private repos can attach files.' },
+      { name: 'code_file_attachments', supported: true, reason: 'Relevant source files can be uploaded locally so Qwen can inspect exact implementation details.' }
+    ],
     references: [{ label: 'Playwright docs', url: 'https://playwright.dev/docs/intro', reason: 'Browser automation docs' }],
     stateSnapshot: {
       protocolVersion: 'A2A-v2.1-lite',
@@ -74,20 +82,91 @@ test('builds prompt payload strings', () => {
     rules: ['Return production-ready output only.']
   });
   assert.match(payload, /Task:\nCheck the repo/);
+  assert.match(payload, /MANDATE:/);
   assert.match(payload, /repo url: https:\/\/github.com\/example\/repo/);
-  assert.match(payload, /Persistent consult state:/);
+  assert.match(payload, /commit url: https:\/\/github.com\/example\/repo\/commit\/abc123/);
+  assert.match(payload, /PERSISTENT CONSULT STATE:/);
   assert.match(payload, /protocol version: A2A-v2.1-lite/);
   assert.match(payload, /context id: ctx-1/);
-  assert.match(payload, /Decision history:/);
+  assert.match(payload, /DECISION HISTORY:/);
   assert.match(payload, /Previous decision\./);
-  assert.match(payload, /Relevant file URLs:/);
-  assert.match(payload, /Issue URLs:/);
+  assert.match(payload, /RELEVANT FILE URLs:/);
+  assert.match(payload, /ISSUE URLs:/);
   assert.match(payload, /github\.com\/example\/repo\/issues\/12/);
-  assert.match(payload, /Attachment files:/);
+  assert.match(payload, /ATTACHMENT FILES:/);
+  assert.match(payload, /ATTACHMENT GUIDANCE:/);
+  assert.match(payload, /code_file_attachments/);
   assert.match(payload, /private_repo_context/);
-  assert.match(payload, /Capability manifest:/);
+  assert.match(payload, /CAPABILITY MANIFEST:/);
+  assert.match(payload, /OUTPUT REQUIREMENTS:/);
+  assert.match(payload, /VALIDATION:/);
+  assert.match(payload, /DON'T DO:/);
   assert.match(payload, /Playwright docs: https:\/\/playwright.dev\/docs\/intro/);
-  assert.match(payload, /Completion criteria:/);
+  assert.match(payload, /COMPLETION CRITERIA:/);
+});
+
+test('binds each run to a dedicated Qwen session id', () => {
+  assert.equal(resolveQwenSessionId({ sessionId: 'agent-run-1' }), 'agent-run-1');
+  const marker = getQwenSessionMarker('agent-run-1');
+  assert.equal(marker, 'coder-sin-qwen-session:agent-run-1');
+  assert.equal(isQwenSessionBinding({ windowName: marker, sessionStorageId: '' }, 'agent-run-1'), true);
+  assert.equal(isQwenSessionBinding({ windowName: '', sessionStorageId: 'other' }, 'agent-run-1'), false);
+});
+
+test('caps repo-aware prompt URLs at ten unique entries', () => {
+  const payload = buildPromptPayload({
+    prompt: 'Audit the repo with every possible reference',
+    repo: {
+      cwd: '/tmp/project',
+      remote: 'origin',
+      branch: 'main',
+      head: 'abc123',
+      dirty: false,
+      urls: {
+        web: 'https://example.com/repo',
+        commit: 'https://example.com/commit',
+        tree: 'https://example.com/tree'
+      }
+    },
+    package: { name: 'demo', version: '1.0.0', scripts: ['test'], dependencies: ['playwright'], devDependencies: [] },
+    files: ['index.js'],
+    fileReferences: [
+      { path: 'index.js', url: 'https://example.com/blob/index.js' },
+      { path: 'worker.js', url: 'https://example.com/blob/worker.js' },
+      { path: 'server.js', url: 'https://example.com/blob/server.js' },
+      { path: 'client.js', url: 'https://example.com/blob/client.js' }
+    ],
+    issueReferences: [
+      { url: 'https://github.com/example/repo/issues/1' },
+      { url: 'https://github.com/example/repo/issues/2' }
+    ],
+    attachmentCandidates: [],
+    capabilityManifest: [],
+    references: [
+      { label: 'Node.js docs', url: 'https://nodejs.org/docs/latest/api/', reason: 'official' },
+      { label: 'Playwright docs', url: 'https://playwright.dev/docs/intro', reason: 'official' },
+      { label: 'GitHub docs', url: 'https://docs.github.com/actions', reason: 'official' },
+      { label: 'Infisical docs', url: 'https://infisical.com/docs/cli/commands/secrets', reason: 'official' }
+    ],
+    constraints: [],
+    completionCriteria: [],
+    rules: []
+  });
+
+  const urls = [...new Set(payload.match(/https?:\/\/[^\s)]+/gu) || [])];
+  assert.ok(urls.length <= 10);
+});
+
+test('allows temporarily raising the URL budget via env', () => {
+  const previous = process.env.SIN_CODER_QWEN_MAX_URLS;
+  process.env.SIN_CODER_QWEN_MAX_URLS = '12';
+
+  try {
+    assert.equal(resolvePromptUrlBudget(), 12);
+  } finally {
+    if (previous === undefined) delete process.env.SIN_CODER_QWEN_MAX_URLS;
+    else process.env.SIN_CODER_QWEN_MAX_URLS = previous;
+  }
 });
 
 test('retries flaky actions', async () => {
@@ -113,6 +192,30 @@ test('summarizes selector buckets', () => {
     promptInput: { matched: true, totalMatches: 1 },
     sendButton: { matched: false, totalMatches: 0 }
   });
+});
+
+test('enables Chromium CDP compatibility for attach mode', () => {
+  const previous = process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR;
+  delete process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR;
+
+  try {
+    assert.equal(ensureChromiumCdpCompatibility(), '1');
+    assert.equal(process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR, '1');
+  } finally {
+    if (previous === undefined) delete process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR;
+    else process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR = previous;
+  }
+});
+
+test('sanitizes ask-qwen wrapper and rejects CLI artifacts', () => {
+  assert.equal(sanitizePromptForBrowser('/ask-qwen build the thing'), 'build the thing');
+  assert.throws(() => sanitizePromptForBrowser('node ./index.js /ask-qwen build the thing'), /CLI artifact detected/);
+});
+
+test('detects English and German Qwen rate-limit pages', () => {
+  assert.equal(looksLikeQwenRateLimit('You have reached the daily usage limit. Please wait 8 hours.'), true);
+  assert.equal(looksLikeQwenRateLimit('Sie haben das tägliche Nutzungslimit erreicht. Bitte warten Sie 8 Stunden.'), true);
+  assert.equal(looksLikeQwenRateLimit('Normal chat content'), false);
 });
 
 test('resolves explicit Default profile into user data + profile directory', () => {
@@ -156,6 +259,54 @@ test('enables attach mode when CDP url is configured', () => {
     if (previousAttach === undefined) delete process.env.CHROME_ATTACH_MODE;
     else process.env.CHROME_ATTACH_MODE = previousAttach;
   }
+});
+
+test('skips profile existence checks in attach mode', () => {
+  assert.equal(shouldRequireChromeProfilePath({ mode: 'attach' }), false);
+  assert.equal(shouldRequireChromeProfilePath({ mode: 'launch' }), true);
+});
+
+test('skips cloned profile checks only after a verified CDP probe', async () => {
+  let loggedEntry = null;
+  const result = await resolveChromeProfileCheck({ mode: 'attach', cdpUrl: 'http://127.0.0.1:9444' }, {
+    probeFn: async (url, timeoutMs) => {
+      assert.equal(url, 'http://127.0.0.1:9444');
+      assert.equal(timeoutMs, 2500);
+      return { ok: true, latencyMs: 17 };
+    },
+    logFn: async (entry) => {
+      loggedEntry = entry;
+    }
+  });
+
+  assert.deepEqual(result, { requireProfileCheck: false, probeLatencyMs: 17 });
+  assert.deepEqual(loggedEntry, {
+    event: 'attach_mode_skip_sidecar_profile_check',
+    cdpUrl: 'http://127.0.0.1:9444',
+    probeLatencyMs: 17
+  });
+});
+
+test('fails fast when an attach-mode CDP probe is stale', async () => {
+  await assert.rejects(
+    () => resolveChromeProfileCheck({ mode: 'attach', cdpUrl: 'http://127.0.0.1:9444' }, {
+      probeFn: async () => ({ ok: false, latencyMs: 2501 })
+    }),
+    /not reachable/
+  );
+});
+
+test('still requires the profile check in launch mode', async () => {
+  let probed = false;
+  const result = await resolveChromeProfileCheck({ mode: 'launch', cdpUrl: '' }, {
+    probeFn: async () => {
+      probed = true;
+      return { ok: true, latencyMs: 1 };
+    }
+  });
+
+  assert.deepEqual(result, { requireProfileCheck: true, probeLatencyMs: 0 });
+  assert.equal(probed, false);
 });
 
 test('detects when a refined follow-up is worth asking', () => {

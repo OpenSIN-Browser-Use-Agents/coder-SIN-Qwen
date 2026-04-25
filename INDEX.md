@@ -12,15 +12,31 @@
 - `ignore-filter.js` — `.qwenignore` / `.gitignore` filtering
 - `git.js` — snapshot helper
 - `parser.js` — response parser
-- prompt delivery is human-style text, raw text is the default output, and the parser still prefers final assistant JSON over echoed prompt/context JSON
+- `runtime-config.js` — runtime env parsing and validation
+- `trace.js` — run/trace/span correlation helpers
+- `prompt-builder.js` — strict code-oriented prompt shaping
+- `public-task-file.js` — temporary task packets and optional public gist publishing
+- `qwen-account-rotation.js` — account cooldown and circuit breaker state
+- prompt delivery is normalized into a structured task envelope for both simple and repo-aware prompts, wrapper prefixes like `/ask-qwen` are stripped first, and the parser still prefers final assistant JSON over echoed prompt/context JSON
+- each run now gets a dedicated Qwen session id/tab binding so parallel agents cannot read or send in the wrong chat
+- only verified public URLs are rendered; private or unreachable URLs are stripped into local-only metadata
 - live chat auto-selects `Qwen3.6-Max-Preview` before sending the prompt
 - prompt entry uses keyboard-safe injection for short messages and a faster insert path for long ones to reduce cutoff risk
 - auth now prefers direct email/password login with Infisical-backed Qwen accounts and rotates by cooldown/order state in `artifacts/qwen-account-state.json`
 - extra turns happen only when `--turns 2+` is requested, and they continue in the same chat
-- repo-aware prompts include repository/file URLs plus curated official reference URLs for the current stack
+- repo-aware prompts include repository/file URLs plus curated official reference URLs for the current stack; small ranked source-file attachments are uploaded locally for code turns, PDFs/text/logs can still be attached, and image files stay local-only; URL-bearing context is capped at 10 unique links by default (override with `SIN_CODER_QWEN_MAX_URLS` up to 25), decision history stays short, and completion detection can fall back to local screenshot OCR when the DOM drifts
 - repo-aware consults persist `context_id`, `message_id`, and a compact previous summary in `.coder-sin-qwen-memory.json`
 - consult memory now uses a canonical `state_snapshot` envelope with metadata, mandate, decision history, constraints, and completion criteria
 - validator/critic review now checks constraints, completion criteria, and fluff before the final reply is returned
+- runtime config validation now enforces `email_password` auth, sane session timeouts, and safe CDP port/rate-limit bounds before browser work begins
+- trace correlation now propagates `SIN_CODER_QWEN_RUN_ID`, `SIN_CODER_QWEN_TRACE_ID`, `SIN_CODER_QWEN_SPAN_ID`, and `SIN_CODER_QWEN_PARENT_SPAN_ID` into logs and artifacts
+- `SIN_CODER_QWEN_SESSION_ID` binds the browser tab and consult memory to one agent session
+- `context.urlAccessibility` switches between public URL rendering and local-only fallbacks when URL checks fail
+- `coder-sin-qwen-tasks/` is the runtime workspace for temporary task packets and is ignored by git
+- rate-limit tracking now records cooldowns plus a circuit breaker in `artifacts/qwen-account-state.json`
+- CDP attach now sets `PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR=1` so Playwright does not trip Browser.setDownloadBehavior on connect
+- assistant text stabilization now waits for a stable non-empty answer before the model selectors are reasserted
+- the browser input boundary now strips `/ask-qwen` and rejects CLI artifacts before typing into Qwen
 - `preflight.js` — dependency and env checks
 - `secrets-check.js` — secret presence checks
 - `SECRETS.md` — Infisical and env checklist
@@ -31,7 +47,7 @@
 - the auth flow now clicks the Qwen sign-in entry when needed, uses email/password login, and waits for a real assistant reply before returning
 - live smoke checks reuse the same recovery path as normal runs, so `--smoke-live` validates the recovered browser session
 - `scripts/cdp-status.sh` — check CDP endpoint
-- sidecar CDP attach is the only allowed browser path; the relay prepares it and leaves the attached tab open
+- sidecar CDP attach is the only allowed browser path; the relay prepares it and leaves the attached tab open, and attach mode now probes the CDP endpoint before skipping cloned-profile validation and logs the decision for auditability
 - `scripts/bootstrap-remote.sh` — create remote repo when explicitly allowed
 - `verify.js` — install/test/build verification
 - `smoke.js` — local readiness check

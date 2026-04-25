@@ -12,3 +12,5 @@ artifacts/
 .chrome-auth-proof/
 .coder-sin-qwen-memory.json
 .coder-sin-qwen-autotraining.jsonl
+coder-sin-qwen-tasks/*.md
+coder-sin-qwen-tasks/*.json

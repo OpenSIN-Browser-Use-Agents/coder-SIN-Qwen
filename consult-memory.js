@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { APP_NAME, getScopedEnv } from './runtime-config.js';
+import { installTraceContext, readTraceContext } from './trace.js';
 
 const DEFAULT_MEMORY_FILE = '.coder-sin-qwen-memory.json';
-const CONTEXT_REUSE_WINDOW_MS = 1000 * 60 * 60 * 24;
 
 export async function hydrateConsultContext(baseContext, prompt) {
   if (typeof baseContext === 'string') {
@@ -14,16 +14,19 @@ export async function hydrateConsultContext(baseContext, prompt) {
     };
   }
 
+  const trace = installTraceContext(process.env);
   const memoryFile = resolveMemoryFile();
   const memory = await readMemoryFile(memoryFile);
   const repoKey = baseContext.repo?.urls?.web || baseContext.repo?.cwd || 'unknown-repo';
   const branch = baseContext.repo?.branch || 'N/A';
-  const contextId = findReusableContextId(memory, repoKey, branch) || randomUUID();
+  const sessionId = String(trace.sessionId || trace.runId || randomUUID()).trim();
+  const contextId = sessionId;
   const previousEntry = memory.contexts?.[contextId] || null;
   const messageId = randomUUID();
 
   const stateSnapshot = buildStateSnapshot(baseContext, {
     contextId,
+    sessionId,
     messageId,
     previousMessageId: previousEntry?.lastMessageId || '',
     previousSummary: previousEntry?.latestSummary || '',
@@ -39,6 +42,7 @@ export async function hydrateConsultContext(baseContext, prompt) {
     consultMeta: {
       memoryFile,
       repoKey,
+      sessionId,
       contextId,
       messageId,
       previousMessageId: previousEntry?.lastMessageId || ''
@@ -55,11 +59,13 @@ export async function persistConsultMemory({ consultMeta, context, prompt, reply
   const decisionEntry = buildDecisionEntry({ prompt, summary, parsed });
   const contextEntry = {
     repoKey: consultMeta.repoKey,
+    sessionId: consultMeta.sessionId || consultMeta.contextId || '',
     repoUrl: context.repo?.urls?.web || '',
     branch: context.repo?.branch || 'N/A',
     head: context.repo?.head || 'N/A',
     dirty: Boolean(context.repo?.dirty),
     updatedAt: new Date().toISOString(),
+    trace: readTraceContext(),
     lastMessageId: consultMeta.messageId,
     previousMessageId: consultMeta.previousMessageId || '',
     latestPrompt: prompt,
@@ -111,6 +117,7 @@ export function buildStateSnapshot(context, meta) {
       receiver: 'Qwen',
       timestamp: new Date().toISOString(),
       contextId: meta.contextId,
+      sessionId: meta.sessionId || meta.contextId || '',
       previousMessageId: meta.previousMessageId || ''
     },
     mandate: String(context.prompt || ''),
@@ -121,6 +128,7 @@ export function buildStateSnapshot(context, meta) {
       branch: context.repo?.branch || 'N/A',
       head: context.repo?.head || 'N/A',
       dirty: Boolean(context.repo?.dirty),
+      trace: readTraceContext(),
       affectedFiles: (context.fileReferences || []).slice(0, 8),
       references: (context.references || []).slice(0, 6)
     },
@@ -138,18 +146,6 @@ async function readMemoryFile(memoryFile) {
   } catch {
     return { version: 1, updatedAt: '', contexts: {} };
   }
-}
-
-function findReusableContextId(memory, repoKey, branch) {
-  const now = Date.now();
-  for (const [contextId, entry] of Object.entries(memory.contexts || {})) {
-    if (entry.repoKey !== repoKey) continue;
-    if (entry.branch !== branch) continue;
-    const updatedAt = Date.parse(entry.updatedAt || 0);
-    if (!updatedAt || now - updatedAt > CONTEXT_REUSE_WINDOW_MS) continue;
-    return contextId;
-  }
-  return '';
 }
 
 function buildSummary(reply, parsed) {

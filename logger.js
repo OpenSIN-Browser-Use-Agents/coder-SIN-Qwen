@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { getScopedEnv } from './runtime-config.js';
+import { tracePayload } from './trace.js';
 
 export function resolveLogFile() {
   // Logging is opt-in so local runs do not create surprise files.
@@ -12,6 +13,7 @@ export async function writeLogEntry(entry, logFile = resolveLogFile()) {
 
   const line = `${JSON.stringify({
     timestamp: new Date().toISOString(),
+    ...tracePayload(),
     ...entry
   })}\n`;
 

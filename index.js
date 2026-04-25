@@ -11,12 +11,15 @@ import { writeLogEntry, resolveLogFile } from './logger.js';
 import { restoreLatestSnapshot, restoreSnapshot } from './restore.js';
 import { runPreflight } from './preflight.js';
 import { validateConsultResponse } from './validator.js';
-import { attachLifecycleHooks } from './lifecycle.js';
+import { attachLifecycleHooks, registerLifecycleResource, runLifecycleCleanup } from './lifecycle.js';
 import { getScopedEnv, validateRuntimeConfig } from './runtime-config.js';
+import { installTraceContext } from './trace.js';
+import { prepareTemporaryPublicTaskFile } from './public-task-file.js';
 
 async function main() {
   attachLifecycleHooks();
   const runtimeConfig = validateRuntimeConfig();
+  const traceContext = installTraceContext(process.env, { spanId: process.env.SIN_CODER_QWEN_SPAN_ID || '' });
   const argv = process.argv.slice(2);
   const jsonFlag = argv.includes('--json');
   const snapshotEnabled = argv.includes('--snapshot');
@@ -74,10 +77,30 @@ async function main() {
   }
 
   const baseContext = await buildContext({ prompt: input, projectRoot });
-  const { context, consultMeta } = await hydrateConsultContext(baseContext, input);
+  const promptForQwen = typeof baseContext === 'string' ? baseContext : baseContext.prompt;
+  const hydrated = await hydrateConsultContext(baseContext, promptForQwen);
+  let context = hydrated.context;
+  const consultMeta = hydrated.consultMeta;
   const dryRun = dryRunFlag || runtimeConfig.dryRun;
   const logFile = resolveLogFile();
   const sessionTimeoutMs = runtimeConfig.sessionTimeoutMs;
+
+  if (!dryRun && context?.repo) {
+    const publicTaskFile = await prepareTemporaryPublicTaskFile({
+      context,
+      prompt: promptForQwen,
+      projectRoot: projectRoot || context?.repo?.cwd || process.cwd(),
+      taskId: consultMeta?.contextId || traceContext.runId
+    });
+
+    if (publicTaskFile) {
+      registerLifecycleResource(`public-task-file:${consultMeta?.contextId || traceContext.runId}`, publicTaskFile.cleanup);
+      context = {
+        ...context,
+        publicTaskFile
+      };
+    }
+  }
 
   if (!dryRun) {
     await prepareChromeConnectionForRun();
@@ -86,11 +109,14 @@ async function main() {
   // Persist lightweight structured logs so runs can be audited later.
   writeLogEntry({
     event: 'start',
-    prompt: input,
+    prompt: promptForQwen,
+    rawPrompt: input,
     dryRun,
     snapshotEnabled,
     maxTurns,
     outputMode: jsonFlag ? 'json' : 'text',
+    traceId: traceContext.traceId,
+    runId: traceContext.runId,
     contextId: consultMeta?.contextId || '',
     messageId: consultMeta?.messageId || '',
     previousMessageId: consultMeta?.previousMessageId || ''
@@ -100,19 +126,22 @@ async function main() {
     await writeStdout(`${JSON.stringify(context, null, 2)}\n`);
     writeLogEntry({
       event: 'dry-run',
-      prompt: input,
+      prompt: promptForQwen,
+      rawPrompt: input,
       files: context.files?.length || 0,
+      traceId: traceContext.traceId,
+      runId: traceContext.runId,
       contextId: consultMeta?.contextId || '',
       messageId: consultMeta?.messageId || ''
     }, logFile).catch(() => {});
     return;
   }
 
-  const reply = await runControlledConversation(context, input, maxTurns, sessionTimeoutMs);
+  const reply = await runControlledConversation(context, promptForQwen, maxTurns, sessionTimeoutMs);
   const parsed = parseQwenResponse(reply);
   const review = validateConsultResponse({ reply, parsed, context });
   parsed.review = review;
-  await persistConsultMemory({ consultMeta, context, prompt: input, reply, parsed, review });
+  await persistConsultMemory({ consultMeta, context, prompt: promptForQwen, reply, parsed, review });
 
   if (jsonFlag) {
     await writeStdout(`${JSON.stringify(parsed, null, 2)}\n`);
@@ -123,22 +152,27 @@ async function main() {
 
   writeLogEntry({
     event: 'finish',
-    prompt: input,
+    prompt: promptForQwen,
+    rawPrompt: input,
     status: parsed.plan,
     actions: parsed.actions?.length || 0,
     reviewAction: review.retry_action,
     reviewPass: review.pass,
     outputMode: jsonFlag ? 'json' : 'text',
+    traceId: traceContext.traceId,
+    runId: traceContext.runId,
     contextId: consultMeta?.contextId || '',
     messageId: consultMeta?.messageId || '',
     previousMessageId: consultMeta?.previousMessageId || ''
   }, logFile).catch(() => {});
 }
 
-main().then(() => {
+main().then(async () => {
+  await runLifecycleCleanup('shutdown').catch(() => {});
   // This CLI is single-shot; force a clean exit so lingering Playwright/CDP handles cannot hang the shell.
   process.exit(0);
-}).catch((error) => {
+}).catch(async (error) => {
+  await runLifecycleCleanup('error').catch(() => {});
   // Keep failure output compact and shell-friendly for OpenCode wrappers.
   console.error(error?.stack || String(error));
   process.exit(1);
