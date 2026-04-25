@@ -14,6 +14,7 @@
 - `parser.js` — response parser
 - prompt delivery is human-style text, raw text is the default output, and the parser still prefers final assistant JSON over echoed prompt/context JSON
 - live chat auto-selects `Qwen3.6-Max-Preview` before sending the prompt
+- prompt entry uses keyboard-safe injection for short messages and a faster insert path for long ones to reduce cutoff risk
 - extra turns happen only when `--turns 2+` is requested, and they continue in the same chat
 - repo-aware prompts include repository/file URLs plus curated official reference URLs for the current stack
 - repo-aware consults persist `context_id`, `message_id`, and a compact previous summary in `.coder-sin-qwen-memory.json`

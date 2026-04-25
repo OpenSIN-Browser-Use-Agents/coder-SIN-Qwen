@@ -18,6 +18,7 @@
 - add `modul-qwen-autotraining` and `cli-autotraining.js` for Qwen-guided self-improvement snapshots and suggestions
 - add `lifecycle.js` for bounded graceful shutdown and resource cleanup across CLI/browser flows
 - enforce the Qwen thinking selector onto `Denken` / `Thinking` before each send
+- add keyboard-safe prompt injection with a faster insert fallback for long prompts so Qwen messages are less likely to truncate
 - add external-project mode with `--project-root`, issue URLs, capability manifests, and private-repo attachment candidates
 - add launcher-side CDP recovery that probes endpoints and can auto-start the sidecar before retrying attach
 - make CDP recovery fail fast when no live endpoint can be established, instead of falling back to a broken locked-profile launch

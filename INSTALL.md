@@ -70,6 +70,7 @@ The shared global launcher auto-detects a reachable local CDP endpoint first, so
 
 The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
 After each completed turn it will also re-assert `Qwen3.6-Max-Preview` so the same chat does not visually drift back to Plus.
+Prompt entry now uses keyboard-safe injection for ordinary messages and a faster insert path for very long prompts to avoid cut-off input.
 
 For repo-aware prompts, the relay includes GitHub URLs for the repo and relevant files plus curated official reference URLs for the detected stack.
 It also persists compact consult memory with `context_id`, `message_id`, and the previous summary in `.coder-sin-qwen-memory.json` by default.

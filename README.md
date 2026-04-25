@@ -217,6 +217,7 @@ OpenCode can also expose `coder-SIN-Qwen` as a selectable agent. That agent is m
 The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
 It also re-asserts `Qwen3.6-Max-Preview` after each completed turn so the active chat stays pinned to the intended model.
 Before each send it also enforces the Qwen thinking selector onto `Denken` / `Thinking`.
+Prompt entry now prefers keyboard-safe injection and falls back to a faster text-insert path for very long prompts so chat content is less likely to be cut off.
 
 The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
 
