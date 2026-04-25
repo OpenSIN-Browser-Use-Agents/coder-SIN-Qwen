@@ -12,10 +12,11 @@ import { restoreLatestSnapshot, restoreSnapshot } from './restore.js';
 import { runPreflight } from './preflight.js';
 import { validateConsultResponse } from './validator.js';
 import { attachLifecycleHooks } from './lifecycle.js';
-import { getScopedEnv } from './runtime-config.js';
+import { getScopedEnv, validateRuntimeConfig } from './runtime-config.js';
 
 async function main() {
   attachLifecycleHooks();
+  const runtimeConfig = validateRuntimeConfig();
   const argv = process.argv.slice(2);
   const jsonFlag = argv.includes('--json');
   const snapshotEnabled = argv.includes('--snapshot');
@@ -74,9 +75,9 @@ async function main() {
 
   const baseContext = await buildContext({ prompt: input, projectRoot });
   const { context, consultMeta } = await hydrateConsultContext(baseContext, input);
-  const dryRun = dryRunFlag || getScopedEnv('DRY_RUN', '0') === '1';
+  const dryRun = dryRunFlag || runtimeConfig.dryRun;
   const logFile = resolveLogFile();
-  const sessionTimeoutMs = Number(getScopedEnv('SESSION_TIMEOUT_MS', '180000'));
+  const sessionTimeoutMs = runtimeConfig.sessionTimeoutMs;
 
   if (!dryRun) {
     await prepareChromeConnectionForRun();
