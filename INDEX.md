@@ -15,6 +15,7 @@
 - prompt delivery is human-style text, raw text is the default output, and the parser still prefers final assistant JSON over echoed prompt/context JSON
 - live chat auto-selects `Qwen3.6-Max-Preview` before sending the prompt
 - prompt entry uses keyboard-safe injection for short messages and a faster insert path for long ones to reduce cutoff risk
+- auth now prefers direct email/password login with Infisical-backed Qwen accounts and rotates by cooldown/order state in `artifacts/qwen-account-state.json`
 - extra turns happen only when `--turns 2+` is requested, and they continue in the same chat
 - repo-aware prompts include repository/file URLs plus curated official reference URLs for the current stack
 - repo-aware consults persist `context_id`, `message_id`, and a compact previous summary in `.coder-sin-qwen-memory.json`
@@ -26,10 +27,11 @@
 - `LIVE_RUNBOOK.md` — live execution sequence
 - `MERGE_RUNBOOK.md` — guarded merge sequence
 - `scripts/start-cdp-sidecar.sh` — launch non-destructive CDP sidecar
-- sidecar startup now launches Chrome directly, seeds cloned startup URLs, suppresses crash-restore/search-choice behavior, and opens the configured Qwen URL instead of a placeholder `about:blank` tab
+- sidecar startup now launches Chrome directly, seeds cloned startup URLs, suppresses crash-restore/search-choice behavior, and opens the configured Qwen URL directly
+- the auth flow now clicks the Qwen sign-in entry when needed, uses email/password login, and waits for a real assistant reply before returning
 - live smoke checks reuse the same recovery path as normal runs, so `--smoke-live` validates the recovered browser session
 - `scripts/cdp-status.sh` — check CDP endpoint
-- attach mode reuses an existing blank tab when possible and leaves the attached tab open
+- sidecar CDP attach is the only allowed browser path; the relay prepares it and leaves the attached tab open
 - `scripts/bootstrap-remote.sh` — create remote repo when explicitly allowed
 - `verify.js` — install/test/build verification
 - `smoke.js` — local readiness check

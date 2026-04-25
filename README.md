@@ -126,7 +126,7 @@ Preferred path: attach to a debug-enabled **real Default profile** first.
 export CHROME_CDP_URL="http://127.0.0.1:9335"
 ```
 
-If that is unavailable, use a dedicated non-destructive sidecar instead of touching the main browser owner:
+If that is unavailable, use the dedicated non-destructive sidecar path; the relay prepares it and attaches by CDP:
 
 ```bash
 export CHROME_REMOTE_DEBUGGING_PORT="9444"
@@ -134,7 +134,8 @@ npm run cdp:start
 export CHROME_CDP_URL="http://127.0.0.1:9444"
 ```
 
-The sidecar now launches the Chrome binary directly, seeds the cloned profile's startup URLs, suppresses crash-restore and search-engine-choice prompts, and opens the Qwen chat URL instead of leaving a visible `about:blank` tab behind.
+The sidecar now launches the Chrome binary directly, seeds the cloned profile's startup URLs, suppresses crash-restore and search-engine-choice prompts, and opens the Qwen chat URL directly.
+The auth flow clicks the Qwen sign-in entry when needed, uses direct email/password login, and waits for a real assistant reply before returning.
 Live smoke checks now reuse the same recovery path as normal runs, so `--smoke-live` can validate the authenticated sidecar/attach flow instead of failing on a locked Default profile.
 
 By default the sidecar uses **no profile sync** for the fastest and least fragile recovery path. Set `CHROME_SIDECAR_SYNC_MODE=minimal` or `CHROME_SIDECAR_SYNC_MODE=full` only if you explicitly need copied profile state.
@@ -165,17 +166,15 @@ export CHROME_PROFILE="$HOME/Library/Application Support/Google/Chrome"
 export CHROME_PROFILE_DIRECTORY="Default"
 ```
 
-If Chrome must stay open, prefer attach mode instead of launching a second profile owner:
+The only allowed browser path is the fallback sidecar CDP attach. The relay sets `CHROME_ATTACH_MODE=1` and `CHROME_CDP_URL` internally during preparation:
 
 ```bash
 export CHROME_CDP_URL="http://127.0.0.1:9222"
-# or
-export CHROME_REMOTE_DEBUGGING_PORT="9222"
 ```
 
-In attach mode the repo reuses an existing blank tab when possible, keeps your Chrome session alive, and does not auto-close the attached tab afterward.
+Attach mode keeps the browser alive and does not auto-close the attached tab afterward.
 
-If the recovered session lands on the Qwen auth page, the relay now detects that state and attempts the controlled Google-login fallback path (`Anmelden` → `Fortfahren mit Google` → account/continue selectors).
+If the recovered session lands on the Qwen auth page, the relay uses direct email/password login with Infisical-backed Qwen accounts only.
 
 ## CI / release
 
@@ -186,6 +185,12 @@ If the recovered session lands on the Qwen auth page, the relay now detects that
 ## Environment
 
 - `QWEN_URL` — defaults to `https://chat.qwen.ai`
+- `QWEN_AUTH_METHOD` — defaults to `email_password` when Qwen account credentials are configured
+- `QWEN_ACCOUNT_ORDER` — preferred account order for fallback login (for example `2,3,1`)
+- `QWEN_ACCOUNT_STATE_FILE` — non-secret cooldown state file for account rotation (defaults to `artifacts/qwen-account-state.json`)
+- `QWEN_ACCOUNT_1_EMAIL` / `QWEN_ACCOUNT_1_PASSWORD` — direct login credentials for account 1
+- `QWEN_ACCOUNT_2_EMAIL` / `QWEN_ACCOUNT_2_PASSWORD` — direct login credentials for account 2
+- `QWEN_ACCOUNT_3_EMAIL` / `QWEN_ACCOUNT_3_PASSWORD` — direct login credentials for account 3
 - `CHROME_PROFILE` — Chrome profile folder for authenticated browser runs
 - `CHROME_PROFILE_DIRECTORY` — explicit Chrome profile name when `CHROME_PROFILE` points at the user-data root
 - `CHROME_CDP_URL` — attach to an already-running Chrome debug endpoint

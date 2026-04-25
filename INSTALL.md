@@ -70,6 +70,7 @@ The shared global launcher auto-detects a reachable local CDP endpoint first, so
 
 The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
 After each completed turn it will also re-assert `Qwen3.6-Max-Preview` so the same chat does not visually drift back to Plus.
+For auth, the relay now uses direct email/password login with Infisical-backed account credentials only.
 Prompt entry now uses keyboard-safe injection for ordinary messages and a faster insert path for very long prompts to avoid cut-off input.
 
 For repo-aware prompts, the relay includes GitHub URLs for the repo and relevant files plus curated official reference URLs for the detected stack.
@@ -156,22 +157,25 @@ Screenshots from live checks are written to `artifacts/` by default.
 If `npm run smoke:live` fails with a profile lock message, close Chrome and rerun it.
 If you do not want to close Chrome, use CDP attach mode instead.
 
-Or start a separate debug sidecar that leaves your main Chrome alone:
+The only allowed browser path is the fallback sidecar CDP attach. The relay prepares the sidecar and attaches to it automatically:
 
 ```bash
-export CHROME_REMOTE_DEBUGGING_PORT="9335"
 npm run cdp:start
 npm run cdp:status
 ```
 
-The sidecar launch now uses the Chrome binary directly, seeds cloned startup URLs, suppresses crash-restore/search-choice behavior, and opens `QWEN_URL` directly (default: `https://chat.qwen.ai`) so the visible recovery window does not stay on `about:blank`.
+The sidecar launch uses the Chrome binary directly, seeds cloned startup URLs, suppresses crash-restore/search-choice behavior, and opens `QWEN_URL` directly (default: `https://chat.qwen.ai`).
+The Qwen auth flow now clicks the sign-in entry when needed, uses email/password login, and waits for the assistant reply before returning.
 `--smoke-live` now uses the same recovery path as normal runs, so it can verify the locked Default profile or the recovered sidecar clone end-to-end.
+Account rotation state is stored only as non-secret metadata in `artifacts/qwen-account-state.json` by default.
 
 If authentication does not survive the sidecar snapshot, retry with:
 
 ```bash
 export CHROME_SIDECAR_SYNC_MODE=full
 ```
+
+To seed Infisical-backed Qwen accounts for this repo, use the path `/opensin/coder-sin-qwen` with env names like `QWEN_ACCOUNT_1_EMAIL`, `QWEN_ACCOUNT_1_PASSWORD`, `QWEN_ACCOUNT_2_EMAIL`, `QWEN_ACCOUNT_2_PASSWORD`, `QWEN_ACCOUNT_3_EMAIL`, and `QWEN_ACCOUNT_3_PASSWORD`.
 
 ## 10. Live-run preparation
 
