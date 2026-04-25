@@ -173,6 +173,7 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
     `--profile-directory=${profileDirectory}`,
     '--no-first-run',
     '--no-default-browser-check',
+    '--disable-search-engine-choice-screen',
     '--disable-session-crashed-bubble',
     '--disable-features=SessionRestore,RestoreBackgroundContents',
     startupUrl

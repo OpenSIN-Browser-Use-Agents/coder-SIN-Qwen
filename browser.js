@@ -34,6 +34,7 @@ export async function runQwenSession(input, options = {}) {
     args: [
       '--no-first-run',
       '--no-default-browser-check',
+      '--disable-search-engine-choice-screen',
       '--disable-background-timer-throttling',
       '--disable-backgrounding-occluded-windows',
       '--disable-features=TranslateUI,IsolateOrigins,site-per-process'
