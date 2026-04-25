@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Main CLI entrypoint for the standalone Qwen relay agent.
 import { buildContext } from './context.js';
-import { detectChromeProfileLock, resolveChromeConnectionConfig, runQwenSession } from './browser.js';
+import { runQwenSession } from './browser.js';
 import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
-import { ensureReachableCdp, terminateChromeForUserDataDir } from './cdp-recovery.js';
+import { prepareChromeConnectionForRun } from './cdp-recovery.js';
 import { parseQwenResponse } from './parser.js';
 import { createSnapshot } from './git.js';
 import { runSmokeCheck } from './smoke.js';
@@ -170,36 +170,4 @@ async function runControlledConversation(initialContext, originalPrompt, maxTurn
     sessionTimeoutMs,
     `Qwen session timed out after ${sessionTimeoutMs}ms`
   );
-}
-
-async function prepareChromeConnectionForRun() {
-  // If the default Chrome profile is already in use, prefer recovering a reachable CDP endpoint
-  // instead of blindly falling back to a persistent launch that will fail under a profile lock.
-  const launchConfig = resolveChromeConnectionConfig();
-  if (launchConfig.mode === 'attach') return;
-
-  const lockState = detectChromeProfileLock(launchConfig);
-  if (!lockState.locked) return;
-
-  const recovery = await ensureReachableCdp({ repoRoot: process.cwd(), env: process.env });
-  if (recovery.ok && recovery.cdpUrl && !recovery.startedSidecar && !isSidecarFallbackUrl(recovery.cdpUrl)) {
-    process.env.CHROME_CDP_URL = recovery.cdpUrl;
-    return;
-  }
-
-  if (recovery.ok && recovery.startedSidecar && recovery.sidecarUserDataDir) {
-    // Some sidecar Chrome instances expose CDP endpoints that Playwright cannot manage safely.
-    // In that case, launch directly against the isolated sidecar clone instead of retrying the locked Default profile.
-    terminateChromeForUserDataDir(recovery.sidecarUserDataDir);
-    delete process.env.CHROME_CDP_URL;
-    process.env.CHROME_PROFILE = recovery.sidecarUserDataDir;
-    process.env.CHROME_PROFILE_DIRECTORY = recovery.profileDirectory || 'Default';
-    return;
-  }
-
-  throw new Error(`Chrome profile is already in use and no reachable CDP endpoint could be recovered. ${recovery.error || 'Start a sidecar or export CHROME_CDP_URL manually.'}`.trim());
-}
-
-function isSidecarFallbackUrl(url) {
-  return /127\.0\.0\.1:9444$/u.test(String(url || ''));
 }
