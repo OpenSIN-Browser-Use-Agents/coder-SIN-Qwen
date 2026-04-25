@@ -54,6 +54,6 @@ Run `npm run secrets:push` only when you are sure the current Infisical project 
 - Use `npm run smoke` for local readiness.
 - Set `SIN_CODER_QWEN_SMOKE_LIVE=1` for a live page check.
 - Screenshots are stored in `artifacts/` by default.
-- Live checks require the Chrome `Default` profile to be unused by other Chrome windows.
-- CDP attach mode avoids that requirement when an existing Chrome debug endpoint is available.
-- Sidecar launches default to `CHROME_SIDECAR_SYNC_MODE=minimal` for faster startup.
+- Live checks prepare the sidecar CDP attach path automatically, so your main Chrome can stay open.
+- The sidecar attach path is the only supported runtime browser path.
+- Sidecar launches default to `CHROME_SIDECAR_SYNC_MODE=none` to avoid copying live credential stores.

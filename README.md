@@ -120,13 +120,7 @@ Live-run preparation:
 npm run live:prepare
 ```
 
-Preferred path: attach to a debug-enabled **real Default profile** first.
-
-```bash
-export CHROME_CDP_URL="http://127.0.0.1:9335"
-```
-
-If that is unavailable, use the dedicated non-destructive sidecar path; the relay prepares it and attaches by CDP:
+Use the dedicated non-destructive sidecar path; the relay prepares it and attaches by CDP:
 
 ```bash
 export CHROME_REMOTE_DEBUGGING_PORT="9444"
@@ -140,7 +134,7 @@ Live smoke checks now reuse the same recovery path as normal runs, so `--smoke-l
 
 By default the sidecar uses **no profile sync** for the fastest and least fragile recovery path. Set `CHROME_SIDECAR_SYNC_MODE=minimal` or `CHROME_SIDECAR_SYNC_MODE=full` only if you explicitly need copied profile state.
 
-The shared launcher now probes known local CDP endpoints first, preferring the classic Default-profile attach path on `9335`. Only if no attachable endpoint is reachable will it attempt the non-destructive sidecar fallback on `9444`. If that recovery path cannot produce a live CDP endpoint within the bounded startup window, the relay now fails fast with a clear message instead of silently falling back to a broken profile launch.
+The shared launcher prepares only the sidecar CDP endpoint on `9444` (or your configured `CHROME_REMOTE_DEBUGGING_PORT`). If that recovery path cannot produce a live CDP endpoint within the bounded startup window, the relay fails fast with a clear message instead of silently falling back to a broken startup method.
 
 ## Browser setup
 
@@ -169,7 +163,7 @@ export CHROME_PROFILE_DIRECTORY="Default"
 The only allowed browser path is the fallback sidecar CDP attach. The relay sets `CHROME_ATTACH_MODE=1` and `CHROME_CDP_URL` internally during preparation:
 
 ```bash
-export CHROME_CDP_URL="http://127.0.0.1:9222"
+export CHROME_REMOTE_DEBUGGING_PORT="9444"
 ```
 
 Attach mode keeps the browser alive and does not auto-close the attached tab afterward.
@@ -215,7 +209,7 @@ Run `/ask-qwen` from OpenCode through the repo-local `./.opencode/opencode.json`
 See `INSTALL.md` for the full setup.
 
 The global OpenCode config exposes the canonical `/ask-qwen` command, which calls `node ./index.js` directly. The repo-local config follows that same direct-CLI path instead of relying on a shell wrapper.
-The shared global launcher now also auto-detects a reachable local CDP endpoint (for example `127.0.0.1:9335`) before falling back to browser launch, which avoids Chrome profile-lock failures when your main browser is already running.
+The shared global launcher now prepares the reachable local sidecar CDP endpoint before browser work begins, which avoids Chrome profile-lock failures when your main browser is already running.
 
 OpenCode can also expose `coder-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
 
