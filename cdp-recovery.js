@@ -3,6 +3,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
 
 const DEFAULT_QWEN_URL = 'https://chat.qwen.ai';
 
@@ -74,6 +75,42 @@ export async function ensureReachableCdp({ repoRoot, env = process.env, timeoutM
   }
 
   return { ok: false, cdpUrl: '', startedSidecar: true, error: `No reachable CDP endpoint found after ${timeoutMs}ms` };
+}
+
+export async function prepareChromeConnectionForRun({ repoRoot = process.cwd() } = {}) {
+  const launchConfig = resolveChromeConnectionConfig();
+  if (launchConfig.mode === 'attach') {
+    return { prepared: false, launchConfig, lockState: null, recovery: null };
+  }
+
+  const lockState = detectChromeProfileLock(launchConfig);
+  if (!lockState.locked) {
+    return { prepared: false, launchConfig, lockState, recovery: null };
+  }
+
+  const recovery = await ensureReachableCdp({ repoRoot, env: process.env });
+  if (recovery.ok && recovery.cdpUrl && !isSidecarFallbackUrl(recovery.cdpUrl)) {
+    process.env.CHROME_CDP_URL = recovery.cdpUrl;
+    return { prepared: true, launchConfig, lockState, recovery, mode: 'attach' };
+  }
+
+  if (recovery.ok && recovery.startedSidecar && recovery.sidecarUserDataDir) {
+    terminateChromeForUserDataDir(recovery.sidecarUserDataDir);
+    delete process.env.CHROME_CDP_URL;
+    process.env.CHROME_PROFILE = recovery.sidecarUserDataDir;
+    process.env.CHROME_PROFILE_DIRECTORY = recovery.profileDirectory || 'Default';
+    return {
+      prepared: true,
+      launchConfig,
+      lockState,
+      recovery,
+      mode: 'launch',
+      sidecarUserDataDir: recovery.sidecarUserDataDir,
+      profileDirectory: recovery.profileDirectory || 'Default'
+    };
+  }
+
+  throw new Error(`Chrome profile is already in use and no reachable CDP endpoint could be recovered. ${recovery.error || 'Start a sidecar or export CHROME_CDP_URL manually.'}`.trim());
 }
 
 export async function waitForReachableCdp(candidates, timeoutMs = 20_000) {
