@@ -14,6 +14,8 @@ export const SELECTORS = {
   newChat: ['.sidebar-entry-fixed-list-content', '.sidebar-entry-fixed-list-text', 'button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', 'text=Neue Unterhaltung', '[data-testid="new-chat"]'],
   authEntry: ['.auth-button-ui.login', 'div:has-text("Anmelden")', 'button:has-text("Anmelden")', 'button:has-text("Loslegen")', 'button:has-text("Get started")'],
   authOverlay: ['[role="dialog"]', 'text=Angemeldet bleiben', 'text=Stay signed in', 'text=Willkommen', 'text=Welcome', 'button:has-text("Registrieren")', 'button:has-text("Register")'],
+  authWelcomeDialog: ['[role="dialog"]'],
+  authWelcomeSignIn: ['[role="dialog"] button:has-text("Anmelden")', '[role="dialog"] button:has-text("Sign in")', '[role="dialog"] button:has-text("Log in")'],
   authEmail: ['input[type="email"]', 'input[name="email"]', 'input[autocomplete="email"]', 'input[placeholder*="email" i]', 'input[placeholder*="e-mail" i]', 'input[aria-label*="email" i]', 'input[type="text"]'],
   authPassword: ['input[type="password"]', 'input[name="password"]', 'input[autocomplete="current-password"]', 'input[placeholder*="password" i]', 'input[aria-label*="password" i]'],
   authSubmit: ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Weiter")', 'button:has-text("Continue")', 'button:has-text("Log in")', 'button:has-text("Sign in")', 'button:has-text("Anmelden")'],
@@ -510,14 +512,39 @@ export async function hasBlockingAuthOverlay(page) {
 }
 
 async function maybeEnterAuthPage(page) {
+  if (await dismissAuthWelcomeModal(page)) return;
+
   for (const selector of SELECTORS.authEntry) {
     const locator = page.locator(selector).first();
-    if (await locator.count().catch(() => 0)) {
+    if (!(await locator.count().catch(() => 0))) continue;
+    if (!(await locator.isVisible().catch(() => false))) continue;
+    if (await locator.isEnabled().catch(() => true)) {
       await locator.click({ force: true }).catch(() => {});
       await page.waitForTimeout(1500);
       if (/\/auth(?:\?|$)/iu.test(page.url())) return;
     }
   }
+}
+
+async function dismissAuthWelcomeModal(page) {
+  const dialog = page.locator(SELECTORS.authWelcomeDialog[0]).first();
+  const dialogVisible = await dialog.isVisible({ timeout: 4_000 }).catch(() => false);
+  if (!dialogVisible) return false;
+
+  for (const selector of SELECTORS.authWelcomeSignIn) {
+    const button = page.locator(selector).first();
+    const ready = (await button.count().catch(() => 0))
+      && (await button.isVisible({ timeout: 1_500 }).catch(() => false))
+      && (await button.isEnabled().catch(() => true));
+    if (!ready) continue;
+    await button.click({ force: true }).catch(() => {});
+    await dialog.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+    await page.waitForTimeout(1_000);
+    return true;
+  }
+
+  return false;
 }
 
 async function maybeLoginWithQwenAccounts(page) {
@@ -554,6 +581,7 @@ async function openDirectQwenSigninPage(page) {
   if (!/\/auth\?action=signin/iu.test(page.url())) {
     await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
     await waitForStableUi(page);
+    await dismissAuthWelcomeModal(page).catch(() => false);
     await maybeEnterAuthPage(page);
   }
 
@@ -562,6 +590,7 @@ async function openDirectQwenSigninPage(page) {
       await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
     });
     await waitForStableUi(page);
+    await dismissAuthWelcomeModal(page).catch(() => false);
     await maybeEnterAuthPage(page);
   }
 
@@ -570,6 +599,8 @@ async function openDirectQwenSigninPage(page) {
 }
 
 async function tryEmailPasswordQwenLogin(page, account) {
+  await dismissAuthWelcomeModal(page).catch(() => false);
+
   const emailInput = await findVisibleSelector(page, SELECTORS.authEmail, 20_000);
   if (!emailInput) {
     if (await hasInteractiveChat(page)) return { ok: true, page };

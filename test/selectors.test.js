@@ -20,5 +20,7 @@ test('Qwen selector map stays populated', () => {
   assert.ok(SELECTORS.thinkingOption.some((selector) => selector.includes('Denken')), 'thinking options should include the Denken selector');
   assert.ok(SELECTORS.authEntry.some((selector) => selector.includes('Anmelden') || selector.includes('login')), 'auth entry should include visible login entry points');
   assert.ok(SELECTORS.authOverlay.some((selector) => selector.includes('Angemeldet bleiben') || selector.includes('Welcome') || selector.includes('dialog')), 'auth overlay selectors should include modal-specific blockers');
+  assert.ok(SELECTORS.authWelcomeDialog.some((selector) => selector.includes('dialog')), 'auth welcome dialog should stay scoped to visible dialogs');
+  assert.ok(SELECTORS.authWelcomeSignIn.some((selector) => selector.includes('Anmelden') || selector.includes('Sign in') || selector.includes('Log in')), 'auth welcome sign-in selectors should target the modal sign-in button');
   assert.ok(!('googleLogin' in SELECTORS), 'google login selectors should stay removed');
 });
