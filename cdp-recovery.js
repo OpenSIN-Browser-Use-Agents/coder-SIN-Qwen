@@ -11,6 +11,14 @@ export function resolveStartupUrl(env = process.env) {
   return String(env.QWEN_URL || DEFAULT_QWEN_URL).trim() || DEFAULT_QWEN_URL;
 }
 
+export function resolveChromeBinaryPath(env = process.env, platform = process.platform) {
+  const explicit = String(env.CHROME_BIN || '').trim();
+  if (explicit) return explicit;
+  if (platform === 'darwin') return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  if (platform === 'win32') return 'chrome.exe';
+  return 'google-chrome';
+}
+
 export function buildCandidateCdpUrls(env = process.env) {
   const urls = [
     env.CHROME_CDP_URL || '',
@@ -158,25 +166,16 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
     syncMode: env.CHROME_SIDECAR_SYNC_MODE || 'minimal'
   });
 
-  if (process.platform === 'darwin') {
-    await runSpawn('open', ['-na', 'Google Chrome', '--args',
-      `--remote-debugging-port=${port}`,
-      `--user-data-dir=${userDataDir}`,
-      `--profile-directory=${profileDirectory}`,
-      '--no-first-run',
-      '--no-default-browser-check',
-      startupUrl
-    ], repoRoot, env, timeoutMs);
-  } else {
-    await runSpawn('google-chrome', [
-      `--remote-debugging-port=${port}`,
-      `--user-data-dir=${userDataDir}`,
-      `--profile-directory=${profileDirectory}`,
-      '--no-first-run',
-      '--no-default-browser-check',
-      startupUrl
-    ], repoRoot, env, timeoutMs);
-  }
+  await runSpawn(resolveChromeBinaryPath(env), [
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userDataDir}`,
+    `--profile-directory=${profileDirectory}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-session-crashed-bubble',
+    '--disable-features=SessionRestore,RestoreBackgroundContents',
+    startupUrl
+  ], repoRoot, env, timeoutMs);
 
   return {
     userDataDir,

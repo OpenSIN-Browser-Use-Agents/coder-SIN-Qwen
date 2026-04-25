@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCandidateCdpUrls, resolveStartupUrl } from '../cdp-recovery.js';
+import { buildCandidateCdpUrls, resolveChromeBinaryPath, resolveStartupUrl } from '../cdp-recovery.js';
 
 test('builds unique CDP candidate list from env', () => {
   const urls = buildCandidateCdpUrls({
@@ -19,4 +19,9 @@ test('builds unique CDP candidate list from env', () => {
 test('defaults sidecar startup URL to Qwen chat', () => {
   assert.equal(resolveStartupUrl({}), 'https://chat.qwen.ai');
   assert.equal(resolveStartupUrl({ QWEN_URL: 'https://example.com/custom' }), 'https://example.com/custom');
+});
+
+test('resolves the Chrome binary path from env or platform', () => {
+  assert.equal(resolveChromeBinaryPath({ CHROME_BIN: '/custom/chrome' }, 'darwin'), '/custom/chrome');
+  assert.equal(resolveChromeBinaryPath({}, 'darwin'), '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 });
