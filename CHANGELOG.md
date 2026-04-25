@@ -26,7 +26,7 @@
 - switch the recovery sidecar to a direct Chrome binary launch path with cloned startup URLs, crash-restore suppression, and a cleaner default debug port (`9444`)
 - add `--disable-search-engine-choice-screen` to Chrome launch paths to keep startup deterministic on newer builds
 - restore `9335` Default-profile attach as the preferred primary path, with `9444` sidecar kept as fallback only
-- detect unauthenticated Qwen auth pages and attempt a controlled Google-login fallback flow
+- prefer direct email/password Qwen auth with Infisical-backed account rotation only
 - prefer auto-attach to a reachable local CDP endpoint in the shared launcher to avoid Chrome profile-lock failures
 
 ## 0.1.0
