@@ -62,7 +62,9 @@ export async function loadQwenAccountState(statePath = resolveQwenAccountStatePa
 export async function saveQwenAccountState(state, statePath = resolveQwenAccountStatePath()) {
   const normalized = normalizeAccountState(state);
   await fs.mkdir(path.dirname(statePath), { recursive: true });
-  await fs.writeFile(statePath, `${JSON.stringify(normalized, null, 2)}\n`);
+  const tempPath = `${statePath}.tmp`;
+  await fs.writeFile(tempPath, `${JSON.stringify(normalized, null, 2)}\n`, { mode: 0o600 });
+  await fs.rename(tempPath, statePath);
   return normalized;
 }
 

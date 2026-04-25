@@ -112,20 +112,24 @@ test('enables attach mode when CDP url is configured', () => {
   // Attach mode is the non-destructive path when the operator keeps Chrome open.
   const previousProfile = process.env.CHROME_PROFILE;
   const previousCdp = process.env.CHROME_CDP_URL;
+  const previousPort = process.env.CHROME_REMOTE_DEBUGGING_PORT;
   const previousAttach = process.env.CHROME_ATTACH_MODE;
   process.env.CHROME_PROFILE = '/tmp/Chrome/Default';
-  process.env.CHROME_CDP_URL = 'http://127.0.0.1:9222';
+  process.env.CHROME_REMOTE_DEBUGGING_PORT = '9444';
+  process.env.CHROME_CDP_URL = 'http://127.0.0.1:9444';
   process.env.CHROME_ATTACH_MODE = '1';
 
   try {
     const config = resolveChromeConnectionConfig();
     assert.equal(config.mode, 'attach');
-    assert.equal(config.cdpUrl, 'http://127.0.0.1:9222');
+    assert.equal(config.cdpUrl, 'http://127.0.0.1:9444');
   } finally {
     if (previousProfile === undefined) delete process.env.CHROME_PROFILE;
     else process.env.CHROME_PROFILE = previousProfile;
     if (previousCdp === undefined) delete process.env.CHROME_CDP_URL;
     else process.env.CHROME_CDP_URL = previousCdp;
+    if (previousPort === undefined) delete process.env.CHROME_REMOTE_DEBUGGING_PORT;
+    else process.env.CHROME_REMOTE_DEBUGGING_PORT = previousPort;
     if (previousAttach === undefined) delete process.env.CHROME_ATTACH_MODE;
     else process.env.CHROME_ATTACH_MODE = previousAttach;
   }

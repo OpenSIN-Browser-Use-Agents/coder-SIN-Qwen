@@ -387,6 +387,11 @@ async function openChromeSession(launchConfig) {
     throw new Error('Browser startup is banned unless the sidecar CDP attach path is ready. Run the sidecar preparation step first.');
   }
 
+  const allowedCdpUrl = `http://127.0.0.1:${process.env.CHROME_REMOTE_DEBUGGING_PORT || '9444'}`;
+  if (launchConfig.cdpUrl !== allowedCdpUrl) {
+    throw new Error(`Browser attach is banned unless it targets the prepared sidecar CDP endpoint (${allowedCdpUrl}).`);
+  }
+
   const browser = await connectToChrome(launchConfig);
   const context = browser.contexts()[0];
   if (!context) {
@@ -493,8 +498,8 @@ async function maybeLoginWithQwenAccounts(page) {
   if (!accounts.length) return null;
 
   const statePath = resolveQwenAccountStatePath(process.env);
-  const state = await loadQwenAccountState(statePath);
-  const orderedAccounts = selectNextQwenAccounts(accounts, state);
+  let nextState = await loadQwenAccountState(statePath);
+  const orderedAccounts = selectNextQwenAccounts(accounts, nextState);
   if (!orderedAccounts.length) return null;
 
   const signinPage = await openDirectQwenSigninPage(page);
@@ -502,12 +507,14 @@ async function maybeLoginWithQwenAccounts(page) {
   for (const account of orderedAccounts) {
     const outcome = await tryEmailPasswordQwenLogin(signinPage, account);
     if (outcome.ok) {
-      await saveQwenAccountState(markAccountPreferred(state, account.id), statePath);
+      nextState = markAccountPreferred(nextState, account.id);
+      await saveQwenAccountState(nextState, statePath);
       return outcome.page || signinPage;
     }
 
     if (outcome.rateLimited) {
-      await saveQwenAccountState(markAccountCooldown(state, account.id, defaultCooldownUntil()), statePath);
+      nextState = markAccountCooldown(nextState, account.id, defaultCooldownUntil());
+      await saveQwenAccountState(nextState, statePath);
       continue;
     }
   }
