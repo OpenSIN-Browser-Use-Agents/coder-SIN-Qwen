@@ -163,7 +163,7 @@ npm run cdp:start
 npm run cdp:status
 ```
 
-The sidecar launch now uses the Chrome binary directly, seeds cloned startup URLs, suppresses crash-restore behavior, and opens `QWEN_URL` directly (default: `https://chat.qwen.ai`) so the visible recovery window does not stay on `about:blank`.
+The sidecar launch now uses the Chrome binary directly, seeds cloned startup URLs, suppresses crash-restore/search-choice behavior, and opens `QWEN_URL` directly (default: `https://chat.qwen.ai`) so the visible recovery window does not stay on `about:blank`.
 `--smoke-live` now uses the same recovery path as normal runs, so it can verify the locked Default profile or the recovered sidecar clone end-to-end.
 
 If authentication does not survive the sidecar snapshot, retry with:

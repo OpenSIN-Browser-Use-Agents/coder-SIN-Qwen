@@ -134,7 +134,7 @@ npm run cdp:start
 export CHROME_CDP_URL="http://127.0.0.1:9444"
 ```
 
-The sidecar now launches the Chrome binary directly, seeds the cloned profile's startup URLs, disables crash-restore prompts, and opens the Qwen chat URL instead of leaving a visible `about:blank` tab behind.
+The sidecar now launches the Chrome binary directly, seeds the cloned profile's startup URLs, suppresses crash-restore and search-engine-choice prompts, and opens the Qwen chat URL instead of leaving a visible `about:blank` tab behind.
 Live smoke checks now reuse the same recovery path as normal runs, so `--smoke-live` can validate the authenticated sidecar/attach flow instead of failing on a locked Default profile.
 
 By default the sidecar uses **no profile sync** for the fastest and least fragile recovery path. Set `CHROME_SIDECAR_SYNC_MODE=minimal` or `CHROME_SIDECAR_SYNC_MODE=full` only if you explicitly need copied profile state.
