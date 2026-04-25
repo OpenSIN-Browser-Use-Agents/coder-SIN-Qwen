@@ -62,3 +62,4 @@
 - The shared global launcher now auto-detects a reachable local CDP endpoint before attempting browser launch, preventing the profile-lock failure seen when Chrome is already running.
 - The preferred attach order is now the real Default-profile path on `9335` first, with the `9444` sidecar kept only as a fallback.
 - The sidecar recovery launch now opens the configured Qwen URL directly so fallback windows do not sit on `about:blank`.
+- `--smoke-live` now reuses the same recovery path as normal runs, so it can validate the recovered auth/session path instead of failing on a locked Default profile.
