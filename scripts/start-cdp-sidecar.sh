@@ -167,6 +167,7 @@ nohup "$CHROME_BIN" \
   --profile-directory="$PROFILE_DIRECTORY" \
   --no-first-run \
   --no-default-browser-check \
+  --disable-search-engine-choice-screen \
   --disable-session-crashed-bubble \
   --disable-features=SessionRestore,RestoreBackgroundContents \
   "$START_URL" >>"$SIDECAR_LOG" 2>&1 &
