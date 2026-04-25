@@ -32,13 +32,6 @@ export function buildCandidateCdpUrls(env = process.env) {
   return [...new Set(urls)];
 }
 
-export async function findReachableCdpUrl(env = process.env) {
-  for (const candidate of buildCandidateCdpUrls(env)) {
-    if (await isReachableCdp(candidate)) return candidate;
-  }
-  return '';
-}
-
 export async function isReachableCdp(baseUrl) {
   try {
     const controller = new AbortController();
@@ -52,19 +45,15 @@ export async function isReachableCdp(baseUrl) {
 }
 
 export async function ensureReachableCdp({ repoRoot, env = process.env, timeoutMs = 20_000 } = {}) {
-  const existing = await findReachableCdpUrl(env);
-  if (existing) {
-    if (isSidecarFallbackUrl(existing)) {
-      const sidecarUserDataDir = resolveSidecarUserDataDir(repoRoot, env);
-      return {
-        ok: true,
-        cdpUrl: existing,
-        startedSidecar: true,
-        sidecarUserDataDir,
-        profileDirectory: env.CHROME_PROFILE_DIRECTORY || 'Default'
-      };
-    }
-    return { ok: true, cdpUrl: existing, startedSidecar: false };
+  const sidecarUrl = `http://127.0.0.1:${env.CHROME_REMOTE_DEBUGGING_PORT || '9444'}`;
+  if (await isReachableCdp(sidecarUrl)) {
+    return {
+      ok: true,
+      cdpUrl: sidecarUrl,
+      startedSidecar: true,
+      sidecarUserDataDir: resolveSidecarUserDataDir(repoRoot, env),
+      profileDirectory: env.CHROME_PROFILE_DIRECTORY || 'Default'
+    };
   }
 
   if (!repoRoot) {
@@ -74,51 +63,31 @@ export async function ensureReachableCdp({ repoRoot, env = process.env, timeoutM
   const started = await startSidecar(repoRoot, env);
   if (!started.ok) return { ok: false, cdpUrl: '', startedSidecar: false, error: started.error };
 
-  const resolved = await waitForReachableCdp(buildCandidateCdpUrls(env), timeoutMs);
+  const resolved = await waitForReachableCdp([sidecarUrl], timeoutMs);
   if (resolved) return { ok: true, cdpUrl: resolved, startedSidecar: true, sidecarUserDataDir: started.userDataDir, profileDirectory: started.profileDirectory };
-
-  // Even if CDP attach is not usable, the sidecar clone can still be launched directly as an isolated browser context.
-  if (started.userDataDir) {
-    return { ok: true, cdpUrl: '', startedSidecar: true, sidecarUserDataDir: started.userDataDir, profileDirectory: started.profileDirectory };
-  }
 
   return { ok: false, cdpUrl: '', startedSidecar: true, error: `No reachable CDP endpoint found after ${timeoutMs}ms` };
 }
 
 export async function prepareChromeConnectionForRun({ repoRoot = process.cwd() } = {}) {
   const launchConfig = resolveChromeConnectionConfig();
-  if (launchConfig.mode === 'attach') {
-    return { prepared: false, launchConfig, lockState: null, recovery: null };
-  }
-
   const lockState = detectChromeProfileLock(launchConfig);
-  if (!lockState.locked) {
-    return { prepared: false, launchConfig, lockState, recovery: null };
-  }
-
   const recovery = await ensureReachableCdp({ repoRoot, env: process.env });
-  if (recovery.ok && recovery.cdpUrl && !isSidecarFallbackUrl(recovery.cdpUrl)) {
+  if (recovery.ok && recovery.cdpUrl) {
+    process.env.CHROME_ATTACH_MODE = '1';
     process.env.CHROME_CDP_URL = recovery.cdpUrl;
-    return { prepared: true, launchConfig, lockState, recovery, mode: 'attach' };
-  }
-
-  if (recovery.ok && recovery.startedSidecar && recovery.sidecarUserDataDir) {
-    terminateChromeForUserDataDir(recovery.sidecarUserDataDir);
-    delete process.env.CHROME_CDP_URL;
-    process.env.CHROME_PROFILE = recovery.sidecarUserDataDir;
-    process.env.CHROME_PROFILE_DIRECTORY = recovery.profileDirectory || 'Default';
     return {
       prepared: true,
       launchConfig,
       lockState,
       recovery,
-      mode: 'launch',
+      mode: 'attach',
       sidecarUserDataDir: recovery.sidecarUserDataDir,
       profileDirectory: recovery.profileDirectory || 'Default'
     };
   }
 
-  throw new Error(`Chrome profile is already in use and no reachable CDP endpoint could be recovered. ${recovery.error || 'Start a sidecar or export CHROME_CDP_URL manually.'}`.trim());
+  throw new Error(`No reachable sidecar CDP endpoint could be prepared. ${recovery.error || 'Start the sidecar or export CHROME_CDP_URL manually.'}`.trim());
 }
 
 export async function waitForReachableCdp(candidates, timeoutMs = 20_000) {
@@ -332,10 +301,6 @@ function looksLikeProfileDir(value) {
   return /^(Default|Profile\s+\d+|Guest Profile|System Profile)$/u.test(name);
 }
 
-function isSidecarFallbackUrl(url) {
-  return /127\.0\.0\.1:9444$/u.test(String(url || ''));
-}
-
 function runSpawn(command, args, cwd, env, timeoutMs) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -361,21 +326,4 @@ function runSpawn(command, args, cwd, env, timeoutMs) {
 
 export function toFileUrl(filePath) {
   return pathToFileURL(filePath).href;
-}
-
-export function terminateChromeForUserDataDir(userDataDir) {
-  if (!userDataDir) return;
-  try {
-    const output = execFileSync('pgrep', ['-fal', 'Google Chrome'], { encoding: 'utf8' }).trim();
-    if (!output) return;
-    for (const line of output.split('\n')) {
-      if (!line.includes(userDataDir)) continue;
-      const pid = Number(line.trim().split(/\s+/u)[0]);
-      if (Number.isFinite(pid)) {
-        try { process.kill(pid, 'SIGTERM'); } catch {}
-      }
-    }
-  } catch {
-    // Ignore missing process-list tools.
-  }
 }
