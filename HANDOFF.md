@@ -61,3 +61,4 @@
 - The global OpenCode config now uses a portable launcher plus `--project-root "$PWD"`, so external repos do not accidentally send coder-SIN-Qwen's own repo context to Qwen.
 - The shared global launcher now auto-detects a reachable local CDP endpoint before attempting browser launch, preventing the profile-lock failure seen when Chrome is already running.
 - The preferred attach order is now the real Default-profile path on `9335` first, with the `9444` sidecar kept only as a fallback.
+- The sidecar recovery launch now opens the configured Qwen URL directly so fallback windows do not sit on `about:blank`.

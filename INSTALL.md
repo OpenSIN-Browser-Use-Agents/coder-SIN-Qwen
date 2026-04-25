@@ -163,6 +163,8 @@ npm run cdp:start
 npm run cdp:status
 ```
 
+The sidecar launch now opens `QWEN_URL` directly (default: `https://chat.qwen.ai`) so the visible recovery window does not stay on `about:blank`.
+
 If authentication does not survive the sidecar snapshot, retry with:
 
 ```bash

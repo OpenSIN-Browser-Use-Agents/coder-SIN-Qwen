@@ -134,6 +134,8 @@ npm run cdp:start
 export CHROME_CDP_URL="http://127.0.0.1:9444"
 ```
 
+The sidecar now opens the Qwen chat URL directly instead of leaving a visible `about:blank` tab behind.
+
 By default the sidecar uses **no profile sync** for the fastest and least fragile recovery path. Set `CHROME_SIDECAR_SYNC_MODE=minimal` or `CHROME_SIDECAR_SYNC_MODE=full` only if you explicitly need copied profile state.
 
 The shared launcher now probes known local CDP endpoints first, preferring the classic Default-profile attach path on `9335`. Only if no attachable endpoint is reachable will it attempt the non-destructive sidecar fallback on `9444`. If that recovery path cannot produce a live CDP endpoint within the bounded startup window, the relay now fails fast with a clear message instead of silently falling back to a broken profile launch.
