@@ -163,7 +163,8 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
     profileDirectory,
     userDataDir,
     profileDir,
-    syncMode: env.CHROME_SIDECAR_SYNC_MODE || 'minimal'
+    syncMode: env.CHROME_SIDECAR_SYNC_MODE || 'minimal',
+    startupUrl
   });
 
   await runSpawn(resolveChromeBinaryPath(env), [
@@ -189,12 +190,15 @@ function resolveSidecarUserDataDir(repoRoot, env) {
   return path.join(sidecarRoot, 'user-data');
 }
 
-async function cloneChromeProfileState({ sourceProfile, profileDirectory, userDataDir, profileDir, syncMode }) {
+async function cloneChromeProfileState({ sourceProfile, profileDirectory, userDataDir, profileDir, syncMode, startupUrl }) {
   const sourcePath = path.resolve(sourceProfile);
   const sourceUserDataDir = looksLikeProfileDir(sourcePath) ? path.dirname(sourcePath) : sourcePath;
   const sourceProfileDir = looksLikeProfileDir(sourcePath) ? sourcePath : path.join(sourcePath, profileDirectory);
 
-  if (syncMode === 'none') return;
+  if (syncMode === 'none') {
+    await seedChromeStartupPreferences(profileDir, startupUrl);
+    return;
+  }
 
   const rootItems = ['Local State', 'First Run', 'Last Version'];
   const minimalItems = [
@@ -227,6 +231,32 @@ async function cloneChromeProfileState({ sourceProfile, profileDirectory, userDa
   for (const name of profileItems) {
     await copyIfExists(path.join(sourceProfileDir, name), path.join(profileDir, name));
   }
+
+  await seedChromeStartupPreferences(profileDir, startupUrl);
+}
+
+export async function seedChromeStartupPreferences(profileDir, startupUrl) {
+  const preferencesPath = path.join(profileDir, 'Preferences');
+  let prefs = {};
+
+  try {
+    const raw = await fs.readFile(preferencesPath, 'utf8');
+    prefs = raw.trim() ? JSON.parse(raw) : {};
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+
+  if (!prefs.session || typeof prefs.session !== 'object' || Array.isArray(prefs.session)) {
+    prefs.session = {};
+  }
+
+  prefs.session.restore_on_startup = 4;
+  prefs.session.startup_urls = [startupUrl];
+  prefs.homepage = startupUrl;
+  prefs.homepage_is_newtabpage = false;
+
+  await fs.mkdir(path.dirname(preferencesPath), { recursive: true });
+  await fs.writeFile(preferencesPath, `${JSON.stringify(prefs, null, 2)}\n`);
 }
 
 async function listCopyableItems(sourceProfileDir) {
