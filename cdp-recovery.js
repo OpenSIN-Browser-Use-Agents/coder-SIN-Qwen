@@ -4,6 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+const DEFAULT_QWEN_URL = 'https://chat.qwen.ai';
+
+export function resolveStartupUrl(env = process.env) {
+  return String(env.QWEN_URL || DEFAULT_QWEN_URL).trim() || DEFAULT_QWEN_URL;
+}
+
 export function buildCandidateCdpUrls(env = process.env) {
   const urls = [
     env.CHROME_CDP_URL || '',
@@ -83,9 +89,12 @@ export async function waitForReachableCdp(candidates, timeoutMs = 20_000) {
 
 async function startSidecar(repoRoot, env) {
   try {
+    const profileDirectory = await detectBestChromeProfileDirectory(env);
     const recoveryEnv = {
       ...env,
-      CHROME_REMOTE_DEBUGGING_PORT: env.CHROME_REMOTE_DEBUGGING_PORT || '9444'
+      CHROME_REMOTE_DEBUGGING_PORT: env.CHROME_REMOTE_DEBUGGING_PORT || '9444',
+      CHROME_PROFILE_DIRECTORY: profileDirectory,
+      CHROME_SIDECAR_SYNC_MODE: env.CHROME_SIDECAR_SYNC_MODE || 'full'
     };
     const launched = await launchSidecarDirectly(repoRoot, recoveryEnv, Number(env.CHROME_SIDECAR_START_TIMEOUT_MS || 25000));
     return { ok: true, ...launched };
@@ -98,10 +107,19 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
   const port = env.CHROME_REMOTE_DEBUGGING_PORT || '9444';
   const profileDirectory = env.CHROME_PROFILE_DIRECTORY || 'Default';
   const userDataDir = resolveSidecarUserDataDir(repoRoot, env);
+  const startupUrl = resolveStartupUrl(env);
   const sidecarRoot = path.dirname(userDataDir);
   const profileDir = path.join(userDataDir, profileDirectory);
   await fs.rm(sidecarRoot, { recursive: true, force: true }).catch(() => {});
   await fs.mkdir(profileDir, { recursive: true });
+
+  await cloneChromeProfileState({
+    sourceProfile: env.CHROME_PROFILE || defaultChromeUserDataDir(),
+    profileDirectory,
+    userDataDir,
+    profileDir,
+    syncMode: env.CHROME_SIDECAR_SYNC_MODE || 'minimal'
+  });
 
   if (process.platform === 'darwin') {
     await runSpawn('open', ['-na', 'Google Chrome', '--args',
@@ -110,7 +128,7 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
       `--profile-directory=${profileDirectory}`,
       '--no-first-run',
       '--no-default-browser-check',
-      'about:blank'
+      startupUrl
     ], repoRoot, env, timeoutMs);
   } else {
     await runSpawn('google-chrome', [
@@ -119,7 +137,7 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
       `--profile-directory=${profileDirectory}`,
       '--no-first-run',
       '--no-default-browser-check',
-      'about:blank'
+      startupUrl
     ], repoRoot, env, timeoutMs);
   }
 
@@ -133,6 +151,118 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
 function resolveSidecarUserDataDir(repoRoot, env) {
   const sidecarRoot = env.CHROME_SIDECAR_ROOT || path.join(os.tmpdir(), 'coder-sin-qwen-sidecar');
   return path.join(sidecarRoot, 'user-data');
+}
+
+async function cloneChromeProfileState({ sourceProfile, profileDirectory, userDataDir, profileDir, syncMode }) {
+  const sourcePath = path.resolve(sourceProfile);
+  const sourceUserDataDir = looksLikeProfileDir(sourcePath) ? path.dirname(sourcePath) : sourcePath;
+  const sourceProfileDir = looksLikeProfileDir(sourcePath) ? sourcePath : path.join(sourcePath, profileDirectory);
+
+  if (syncMode === 'none') return;
+
+  const rootItems = ['Local State', 'First Run', 'Last Version'];
+  const minimalItems = [
+    'Preferences',
+    'Secure Preferences',
+    'Cookies',
+    'Cookies-journal',
+    'IndexedDB',
+    'Session Storage',
+    'Local Storage',
+    'Sessions',
+    'Login Data',
+    'Login Data For Account',
+    'Login Data-journal',
+    'Login Data For Account-journal',
+    'Service Worker',
+    'Storage',
+    'Web Data',
+    'Web Data-journal'
+  ];
+
+  for (const name of rootItems) {
+    await copyIfExists(path.join(sourceUserDataDir, name), path.join(userDataDir, name));
+  }
+
+  const profileItems = syncMode === 'full'
+    ? await listCopyableItems(sourceProfileDir)
+    : minimalItems;
+
+  for (const name of profileItems) {
+    await copyIfExists(path.join(sourceProfileDir, name), path.join(profileDir, name));
+  }
+}
+
+async function listCopyableItems(sourceProfileDir) {
+  const entries = await fs.readdir(sourceProfileDir, { withFileTypes: true });
+  return entries
+    .map((entry) => entry.name)
+    .filter((name) => !['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'RunningChromeVersion', 'Crashpad', 'GPUCache', 'GrShaderCache', 'ShaderCache', 'Code Cache', 'DawnCache', 'Visited Links', 'chrome_debug.log'].includes(name));
+}
+
+async function copyIfExists(source, destination) {
+  try {
+    const stat = await fs.stat(source);
+    if (stat.isDirectory()) {
+      await fs.cp(source, destination, { recursive: true, force: true, errorOnExist: false });
+    } else {
+      await fs.mkdir(path.dirname(destination), { recursive: true });
+      await fs.copyFile(source, destination);
+    }
+  } catch {
+    // Ignore missing files in partial profile copies.
+  }
+}
+
+async function detectBestChromeProfileDirectory(env) {
+  const explicit = String(env.CHROME_PROFILE_DIRECTORY || '').trim();
+  if (explicit && explicit.toLowerCase() !== 'auto') return explicit;
+
+  const userDataDir = String(env.CHROME_PROFILE || '').trim() || defaultChromeUserDataDir();
+  const root = looksLikeProfileDir(userDataDir) ? path.dirname(userDataDir) : userDataDir;
+  let entries;
+  try {
+    entries = await fs.readdir(root, { withFileTypes: true });
+  } catch {
+    return 'Default';
+  }
+
+  const scored = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const name = entry.name;
+    if (!/^(Default|Profile\s+\d+|Guest Profile|System Profile)$/u.test(name)) continue;
+    const qwenDb = path.join(root, name, 'IndexedDB', 'https_chat.qwen.ai_0.indexeddb.leveldb');
+    let size = 0;
+    try {
+      const files = await fs.readdir(qwenDb, { withFileTypes: true });
+      for (const file of files) {
+        if (!file.isFile()) continue;
+        const stat = await fs.stat(path.join(qwenDb, file.name));
+        size += stat.size;
+      }
+    } catch {
+      size = 0;
+    }
+    scored.push({ name, size });
+  }
+
+  scored.sort((a, b) => b.size - a.size || (a.name === 'Default' ? -1 : 1));
+  return scored[0]?.name || 'Default';
+}
+
+function defaultChromeUserDataDir() {
+  const platform = os.platform();
+  return platform === 'darwin'
+    ? path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome')
+    : platform === 'win32'
+      ? path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'User Data')
+      : path.join(os.homedir(), '.config', 'google-chrome');
+}
+
+function looksLikeProfileDir(value) {
+  const name = path.basename(value);
+  return /^(Default|Profile\s+\d+|Guest Profile|System Profile)$/u.test(name);
 }
 
 function isSidecarFallbackUrl(url) {
