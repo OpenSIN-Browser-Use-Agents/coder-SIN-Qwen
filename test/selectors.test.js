@@ -19,5 +19,5 @@ test('Qwen selector map stays populated', () => {
   assert.ok(SELECTORS.thinkingMenu.some((selector) => selector.includes('qwen-thinking-selector')), 'thinking menu should include the visible Qwen thinking selector');
   assert.ok(SELECTORS.thinkingOption.some((selector) => selector.includes('Denken')), 'thinking options should include the Denken selector');
   assert.ok(SELECTORS.authEntry.some((selector) => selector.includes('Anmelden') || selector.includes('login')), 'auth entry should include visible login entry points');
-  assert.ok(SELECTORS.googleLogin.some((selector) => selector.includes('Google')), 'google login selectors should include the Google CTA');
+  assert.ok(!('googleLogin' in SELECTORS), 'google login selectors should stay removed');
 });
