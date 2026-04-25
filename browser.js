@@ -4,6 +4,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
 import { safeInjectInput } from './browser-hardening.js';
+import { defaultCooldownUntil, hasQwenAccounts, loadQwenAccountState, loadQwenAccounts, markAccountCooldown, markAccountPreferred, resolveQwenAccountStatePath, saveQwenAccountState, selectNextQwenAccounts } from './qwen-account-rotation.js';
 import { registerLifecycleResource, unregisterLifecycleResource } from './lifecycle.js';
 import { getScopedEnv } from './runtime-config.js';
 
@@ -12,9 +13,9 @@ const QWEN_URL = 'https://chat.qwen.ai';
 export const SELECTORS = {
   newChat: ['.sidebar-entry-fixed-list-content', '.sidebar-entry-fixed-list-text', 'button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', 'text=Neue Unterhaltung', '[data-testid="new-chat"]'],
   authEntry: ['.auth-button-ui.login', 'div:has-text("Anmelden")', 'button:has-text("Anmelden")', 'button:has-text("Loslegen")', 'button:has-text("Get started")'],
-  googleLogin: ['button:has-text("Fortfahren mit Google")', 'button:has-text("Continue with Google")', '.qwenchat-auth-pc-other-login-button:has-text("Google")'],
-  googleContinue: ['button:has-text("Weiter")', 'button:has-text("Continue")', 'button:has-text("Weiter als")'],
-  googleAccount: ['[data-identifier]', '[data-email]', 'div[role="link"][data-identifier]', 'li [data-identifier]'],
+  authEmail: ['input[type="email"]', 'input[name="email"]', 'input[autocomplete="email"]', 'input[placeholder*="email" i]', 'input[placeholder*="e-mail" i]', 'input[aria-label*="email" i]', 'input[type="text"]'],
+  authPassword: ['input[type="password"]', 'input[name="password"]', 'input[autocomplete="current-password"]', 'input[placeholder*="password" i]', 'input[aria-label*="password" i]'],
+  authSubmit: ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Weiter")', 'button:has-text("Continue")', 'button:has-text("Log in")', 'button:has-text("Sign in")', 'button:has-text("Anmelden")'],
   modelMenu: ['header span.ant-dropdown-trigger', 'header .index-module__model-selector-text___XvWe0', 'span.ant-dropdown-trigger', 'button:has-text("Model")', 'button:has-text("Modell")', '[data-testid="model-selector"]'],
   thinkingMenu: ['.qwen-thinking-selector .ant-select-selector', '.qwen-thinking-selector [role="combobox"]', '.qwen-select-thinking-label', '.qwen-select-thinking-label-text'],
   thinkingOption: ['.ant-select-item-option[title="Denken"]', '[role="option"][aria-label="Denken"]', '.ant-select-item-option[title="Thinking"]', '[role="option"][aria-label="Thinking"]'],
@@ -314,8 +315,11 @@ export function resolveChromeProfilePath() {
 }
 
 export function resolveChromeConnectionConfig() {
-  // Attach mode lets operators keep Chrome open while the tool borrows the existing profile session.
-  const cdpUrl = process.env.CHROME_CDP_URL || (process.env.CHROME_REMOTE_DEBUGGING_PORT ? `http://127.0.0.1:${process.env.CHROME_REMOTE_DEBUGGING_PORT}` : '');
+  // Keep the default path stable: launch the profile-backed browser unless attach mode is explicitly requested.
+  const attachEnabled = process.env.CHROME_ATTACH_MODE === '1';
+  const cdpUrl = attachEnabled
+    ? (process.env.CHROME_CDP_URL || (process.env.CHROME_REMOTE_DEBUGGING_PORT ? `http://127.0.0.1:${process.env.CHROME_REMOTE_DEBUGGING_PORT}` : ''))
+    : '';
   return {
     ...resolveChromeLaunchConfig(),
     mode: cdpUrl ? 'attach' : 'launch',
@@ -369,22 +373,6 @@ function ensureProfileExists(profilePath) {
   }
 }
 
-async function launchChromeContext(launchConfig, options) {
-  // Persistent profile launches are the most failure-prone part of the stack, so wrap errors clearly.
-  try {
-    return await chromium.launchPersistentContext(launchConfig.userDataDir, {
-      ...options,
-      args: [...(options.args || []), `--profile-directory=${launchConfig.profileDirectory}`]
-    });
-  } catch (error) {
-    const lockState = detectChromeProfileLock(launchConfig);
-    const lockHint = lockState.locked
-      ? ` Profile lock detected (${lockState.reason}).`
-      : '';
-    throw new Error(`Failed to launch Chrome with profile ${launchConfig.profilePath}. Close other Chrome windows using that profile and retry.${lockHint} Original error: ${error?.message || String(error)}`);
-  }
-}
-
 async function connectToChrome(launchConfig) {
   // CDP attach mode keeps the user's existing Chrome session alive instead of spawning a second browser.
   try {
@@ -394,42 +382,36 @@ async function connectToChrome(launchConfig) {
   }
 }
 
-async function openChromeSession(launchConfig, options) {
-  // Session abstraction hides the difference between launching Chrome and attaching to it.
-  if (launchConfig.mode === 'attach') {
-    const browser = await connectToChrome(launchConfig);
-    const context = browser.contexts()[0];
-    if (!context) {
-      throw new Error('Attached Chrome session does not expose a usable browser context.');
-    }
-
-    const page = await getAttachPage(context);
-    const resourceId = `browser:${Date.now()}:attach`;
-    registerLifecycleResource(resourceId, async () => {
-      await browser.close().catch(() => {});
-    });
-    return {
-      page,
-      close: async () => {
-        // In CDP attach mode, Playwright closes only its own connection and leaves the operator's Chrome running.
-        unregisterLifecycleResource(resourceId);
-        await browser.close().catch(() => {});
-      }
-    };
+async function openChromeSession(launchConfig) {
+  if (launchConfig.mode !== 'attach' || !launchConfig.cdpUrl) {
+    throw new Error('Browser startup is banned unless the sidecar CDP attach path is ready. Run the sidecar preparation step first.');
   }
 
-  const context = await launchChromeContext(launchConfig, options);
-  const page = context.pages()[0] ?? await context.newPage();
-  const resourceId = `browser:${Date.now()}:launch`;
+  const browser = await connectToChrome(launchConfig);
+  const context = browser.contexts()[0];
+  if (!context) {
+    throw new Error('Attached Chrome session does not expose a usable browser context.');
+  }
+
+  const page = await getAttachPage(context);
+  const resourceId = `browser:${Date.now()}:attach`;
+  const closeBrowser = createBrowserSessionCloser(browser);
   registerLifecycleResource(resourceId, async () => {
-    await context.close().catch(() => {});
+    await closeBrowser();
   });
   return {
     page,
     close: async () => {
+      // In CDP attach mode, Playwright closes only its own connection and leaves the operator's Chrome running.
       unregisterLifecycleResource(resourceId);
-      await context.close();
+      await closeBrowser();
     }
+  };
+}
+
+export function createBrowserSessionCloser(browser) {
+  return async () => {
+    await browser.close().catch(() => {});
   };
 }
 
@@ -452,14 +434,10 @@ export function detectChromeProfileLock(launchConfig = resolveChromeLaunchConfig
 }
 
 async function getAttachPage(context) {
-  // Reuse an existing blank tab first so attach-mode checks do not leave a useless about:blank tab behind.
   const pages = context.pages();
-  const reusable = pages.find((page) => {
-    const url = page.url();
-    return url === 'about:blank' || url === 'chrome://newtab/' || url === 'chrome://new-tab-page/';
-  });
+  const qwenPage = pages.find((page) => /chat\.qwen\.ai/iu.test(page.url()));
 
-  if (reusable) return reusable;
+  if (qwenPage) return qwenPage;
   if (pages[0]) return pages[0];
   return context.newPage();
 }
@@ -471,15 +449,19 @@ async function waitForStableUi(page) {
 }
 
 async function ensureQwenAuthenticated(page) {
-  // Prefer already-authenticated sessions. Only enter the Google fallback flow when the page is clearly on auth UI.
+  // Prefer already-authenticated sessions. Direct email/password auth is the default when credentials are configured.
   if (await hasInteractiveChat(page)) return page;
 
   const authVisible = await hasVisibleSelector(page, SELECTORS.authEntry) || /\/auth$/u.test(page.url());
+  if (hasQwenAccounts(process.env)) {
+    const authenticated = await maybeLoginWithQwenAccounts(page).catch(() => null);
+    if (authenticated) return authenticated;
+    throw new Error('Qwen direct email/password login failed. Check the configured Infisical-backed account credentials and account order.');
+  }
+
   if (!authVisible) return page;
 
-  await maybeEnterAuthPage(page);
-  await maybeLoginWithGoogle(page);
-  return waitForAuthenticatedChat(page);
+  throw new Error('Qwen authentication did not complete because no direct email/password account credentials were available.');
 }
 
 async function hasInteractiveChat(page) {
@@ -501,55 +483,121 @@ async function maybeEnterAuthPage(page) {
     if (await locator.count().catch(() => 0)) {
       await locator.click({ force: true }).catch(() => {});
       await page.waitForTimeout(1500);
-      if (/\/auth$/u.test(page.url())) return;
+      if (/\/auth(?:\?|$)/iu.test(page.url())) return;
     }
   }
 }
 
-async function maybeLoginWithGoogle(page) {
-  for (const selector of SELECTORS.googleLogin) {
-    const locator = page.locator(selector).first();
-    if (await locator.count().catch(() => 0)) {
-      const beforePages = new Set(page.context().pages());
-      await locator.click({ force: true }).catch(() => {});
-      await page.waitForTimeout(2500);
-      const authPage = pickAuthPage(page, beforePages);
-      if (authPage) {
-        await handleGoogleAuthPage(authPage);
-      }
-      return;
+async function maybeLoginWithQwenAccounts(page) {
+  const accounts = loadQwenAccounts(process.env);
+  if (!accounts.length) return null;
+
+  const statePath = resolveQwenAccountStatePath(process.env);
+  const state = await loadQwenAccountState(statePath);
+  const orderedAccounts = selectNextQwenAccounts(accounts, state);
+  if (!orderedAccounts.length) return null;
+
+  const signinPage = await openDirectQwenSigninPage(page);
+
+  for (const account of orderedAccounts) {
+    const outcome = await tryEmailPasswordQwenLogin(signinPage, account);
+    if (outcome.ok) {
+      await saveQwenAccountState(markAccountPreferred(state, account.id), statePath);
+      return outcome.page || signinPage;
+    }
+
+    if (outcome.rateLimited) {
+      await saveQwenAccountState(markAccountCooldown(state, account.id, defaultCooldownUntil()), statePath);
+      continue;
     }
   }
+
+  return null;
 }
 
-function pickAuthPage(currentPage, beforePages) {
-  const pages = currentPage.context().pages();
-  const popup = pages.find((page) => !beforePages.has(page));
-  if (popup) return popup;
-  return pages.find((page) => /accounts\.google\.com|oauth|signin/iu.test(page.url())) || null;
-}
+async function openDirectQwenSigninPage(page) {
+  const signinUrl = `${QWEN_URL}/auth?action=signin`;
+  if (!/\/auth\?action=signin/iu.test(page.url())) {
+    await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
+    await waitForStableUi(page);
+    await maybeEnterAuthPage(page);
+  }
 
-async function handleGoogleAuthPage(page) {
+  if (!/\/auth\?action=signin/iu.test(page.url())) {
+    await page.goto(signinUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(async () => {
+      await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
+    });
+    await waitForStableUi(page);
+    await maybeEnterAuthPage(page);
+  }
+
   await page.waitForLoadState('domcontentloaded').catch(() => {});
-  await page.waitForTimeout(1500);
+  return page;
+}
 
-  for (const selector of SELECTORS.googleAccount) {
-    const locator = page.locator(selector).first();
-    if (await locator.count().catch(() => 0)) {
-      await locator.click({ force: true }).catch(() => {});
-      await page.waitForTimeout(1500);
-      break;
-    }
+async function tryEmailPasswordQwenLogin(page, account) {
+  const emailInput = await findVisibleSelector(page, SELECTORS.authEmail, 20_000);
+  if (!emailInput) {
+    if (await hasInteractiveChat(page)) return { ok: true, page };
+    const bodyText = await page.locator('body').innerText().catch(() => '');
+    if (looksLikeQwenRateLimit(bodyText)) return { ok: false, rateLimited: true, reason: 'rate limit page' };
+    return { ok: false, reason: 'email input not found' };
   }
 
-  for (const selector of SELECTORS.googleContinue) {
-    const locator = page.locator(selector).first();
-    if (await locator.count().catch(() => 0)) {
-      await locator.click({ force: true }).catch(() => {});
-      await page.waitForTimeout(1500);
-      break;
-    }
+  await safeInjectInput(page, emailInput, account.email, { env: process.env });
+  await submitAuthStep(page, emailInput);
+
+  const passwordInput = await findVisibleSelector(page, SELECTORS.authPassword, 20_000);
+  if (!passwordInput) {
+    if (await hasInteractiveChat(page)) return { ok: true, page };
+    const bodyText = await page.locator('body').innerText().catch(() => '');
+    if (looksLikeQwenRateLimit(bodyText)) return { ok: false, rateLimited: true, reason: 'rate limit page' };
+    return { ok: false, reason: 'password input not found' };
   }
+
+  await safeInjectInput(page, passwordInput, account.password, { env: process.env });
+  await submitAuthStep(page, passwordInput);
+
+  const bodyText = await page.locator('body').innerText().catch(() => '');
+  if (looksLikeQwenRateLimit(bodyText)) {
+    return { ok: false, rateLimited: true, reason: 'rate limit page' };
+  }
+
+  const authenticatedPage = await waitForAuthenticatedChat(page).catch(() => null);
+  if (authenticatedPage) return { ok: true, page: authenticatedPage };
+  if (await hasInteractiveChat(page)) return { ok: true, page };
+  return { ok: false, reason: 'chat input not found after login' };
+}
+
+async function submitAuthStep(page, input) {
+  await page.waitForTimeout(200);
+  await input.focus().catch(() => {});
+  const submitButton = await findVisibleSelector(page, SELECTORS.authSubmit, 2_500);
+  if (submitButton) {
+    await submitButton.click({ force: true }).catch(() => {});
+  } else {
+    await page.keyboard.press('Enter').catch(() => {});
+  }
+  await page.waitForTimeout(1_000);
+}
+
+async function findVisibleSelector(page, selectors, timeoutMs = 10_000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    for (const selector of selectors) {
+      const locator = page.locator(selector).first();
+      const count = await locator.count().catch(() => 0);
+      if (!count) continue;
+      const visible = await locator.isVisible().catch(() => false);
+      if (visible) return locator;
+    }
+    await page.waitForTimeout(200);
+  }
+  return null;
+}
+
+function looksLikeQwenRateLimit(text) {
+  return /(?:daily\s+usage\s+limit|usage\s+limit|rate\s*limit|too\s+many\s+requests|come\s+back\s+in\s+\d+\s+hours|20\s+hours|20\s+h)/iu.test(String(text || ''));
 }
 
 async function waitForAuthenticatedChat(page) {
@@ -780,24 +828,28 @@ async function submitPrompt(page, input, prompt, previousAssistantState = { coun
 }
 
 async function waitForStreamingDone(page, previousAssistantState = { count: 0, text: '' }) {
-  await page.waitForFunction(({ selectors, previous }) => {
+  const kickedOff = await page.waitForFunction(({ selectors, previous }) => {
     return selectors.some((selector) => {
       const elements = Array.from(document.querySelectorAll(selector));
       if (!elements.length) return false;
       const lastText = String(elements.at(-1)?.innerText || '').trim();
       return elements.length > previous.count || (lastText.length > 0 && lastText !== previous.text);
-    });
+    }) || Boolean(document.querySelector('[aria-busy="true"], .loading, .streaming, .typing-indicator, [data-testid="stop-generation"]'));
   }, {
     selectors: SELECTORS.assistantOutput,
     previous: previousAssistantState
-  }, { timeout: 120_000, polling: 1_000 }).catch(() => {});
+  }, { timeout: 120_000, polling: 1_000 }).then(() => true).catch(() => false);
+
+  if (!kickedOff) {
+    throw new Error('Timed out waiting for Qwen to start responding.');
+  }
 
   await page.waitForTimeout(2_000);
   await page.waitForFunction(() => {
     const hasStopButton = Array.from(document.querySelectorAll('button')).some((button) => /^(stop|stopp)$/iu.test((button.textContent || '').trim()) || /stop-generation/iu.test(button.getAttribute('data-testid') || ''));
     const busyNode = document.querySelector('[aria-busy="true"], .loading, .streaming, .typing-indicator, [data-testid="stop-generation"]');
     return !hasStopButton && !busyNode;
-  }, { timeout: 300_000, polling: 1_000 }).catch(() => {});
+  }, { timeout: 300_000, polling: 1_000 });
 
   await waitForAssistantTextToStabilize(page, previousAssistantState.text);
   await page.waitForTimeout(1_500);
@@ -821,7 +873,7 @@ async function getLastAssistantText(page) {
       if (text.trim()) return text.trim();
     }
   }
-  return page.locator('body').innerText().catch(() => '');
+  return '';
 }
 
 async function getLastAssistantState(page) {

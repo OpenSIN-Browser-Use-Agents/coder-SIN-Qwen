@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildConversationFollowUpPrompt, buildPromptPayload, resolveChromeConnectionConfig, resolveChromeLaunchConfig, shouldContinueConversation, summarizeSelectorReport, withRetry } from '../browser.js';
+import { buildConversationFollowUpPrompt, buildPromptPayload, createBrowserSessionCloser, resolveChromeConnectionConfig, resolveChromeLaunchConfig, shouldContinueConversation, summarizeSelectorReport, withRetry } from '../browser.js';
 
 test('builds prompt payload strings', () => {
   // Objects should become a normal readable operator message instead of a raw JSON blob.
@@ -112,8 +112,10 @@ test('enables attach mode when CDP url is configured', () => {
   // Attach mode is the non-destructive path when the operator keeps Chrome open.
   const previousProfile = process.env.CHROME_PROFILE;
   const previousCdp = process.env.CHROME_CDP_URL;
+  const previousAttach = process.env.CHROME_ATTACH_MODE;
   process.env.CHROME_PROFILE = '/tmp/Chrome/Default';
   process.env.CHROME_CDP_URL = 'http://127.0.0.1:9222';
+  process.env.CHROME_ATTACH_MODE = '1';
 
   try {
     const config = resolveChromeConnectionConfig();
@@ -124,6 +126,8 @@ test('enables attach mode when CDP url is configured', () => {
     else process.env.CHROME_PROFILE = previousProfile;
     if (previousCdp === undefined) delete process.env.CHROME_CDP_URL;
     else process.env.CHROME_CDP_URL = previousCdp;
+    if (previousAttach === undefined) delete process.env.CHROME_ATTACH_MODE;
+    else process.env.CHROME_ATTACH_MODE = previousAttach;
   }
 });
 
@@ -139,4 +143,16 @@ test('builds a fresh follow-up prompt from the original request and reply', () =
   assert.match(prompt, /Refine your previous answer using one same-chat follow-up turn\./);
   assert.match(prompt, /Previous answer:/);
   assert.match(prompt, /run verify/);
+});
+
+test('closes attached browser connections without closing Chrome', async () => {
+  let closed = 0;
+  const attached = {
+    async close() {
+      closed += 1;
+    }
+  };
+
+  await createBrowserSessionCloser(attached)();
+  assert.equal(closed, 1);
 });
