@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
+import { safeInjectInput } from './browser-hardening.js';
 import { registerLifecycleResource, unregisterLifecycleResource } from './lifecycle.js';
 import { getScopedEnv } from './runtime-config.js';
 
@@ -69,7 +70,7 @@ export async function runQwenSession(input, options = {}) {
         await maybeUploadContextAttachments(page, input);
       }
       
-      await enterPrompt(inputBox, currentPrompt);
+      await enterPrompt(page, inputBox, currentPrompt);
       await submitPrompt(page, inputBox, currentPrompt, previousAssistantState);
       await waitForStreamingDone(page, previousAssistantState);
       await waitForPromptReady(page);
@@ -735,7 +736,9 @@ async function findPromptInput(page) {
   return null;
 }
 
-async function enterPrompt(input, prompt) {
+async function enterPrompt(page, input, prompt) {
+  if (await safeInjectInput(page, input, prompt, { env: process.env })) return;
+
   const isTextField = await input.evaluate((node) => {
     const tag = node.tagName.toLowerCase();
     const className = String(node.className || '');
