@@ -61,5 +61,17 @@
 - The global OpenCode config now uses a portable launcher plus `--project-root "$PWD"`, so external repos do not accidentally send coder-SIN-Qwen's own repo context to Qwen.
 - The shared global launcher now auto-detects a reachable local CDP endpoint before attempting browser launch, preventing the profile-lock failure seen when Chrome is already running.
 - The preferred attach order is now the real Default-profile path on `9335` first, with the `9444` sidecar kept only as a fallback.
-- The sidecar recovery launch now opens the configured Qwen URL directly so fallback windows do not sit on `about:blank`.
+- The sidecar recovery launch now uses the Chrome binary directly, suppresses crash-restore behavior, and opens the configured Qwen URL directly so fallback windows do not sit on `about:blank`.
 - `--smoke-live` now reuses the same recovery path as normal runs, so it can validate the recovered auth/session path instead of failing on a locked Default profile.
+
+## Research note: recurring `about:blank`
+
+- macOS `open` goes through LaunchServices; `-n` only forces a new instance, while `--args` just forwards argv to the app entrypoint. That means Chrome startup can still be shaped by macOS resume/session behavior, not just the URL argument.
+- Chromium startup code reads profile prefs like `restore_on_startup` and `startup_urls`, and Chrome Enterprise documents `RestoreOnStartupURLs` as the startup-URL source. If that state is blank, stale, or crash-restored, Chrome can still surface a blank/new-tab window.
+- Practical takeaway: do not trust `open -na` alone for deterministic startup. Prefer direct binary launch or immediately verify the first tab after launch and navigate away from `about:blank` if needed.
+
+Sources:
+- Apple Launch Services docs: https://developer.apple.com/library/archive/documentation/Carbon/Conceptual/LaunchServicesConcepts/LSCTasks/LSCTasks.html
+- macOS `open(1)` behavior summary: https://www.unix.com/man-page/osx/1/open?os=osx&section=1&query=open
+- Chromium startup prefs: https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/browser/prefs/session_startup_pref.cc
+- Chrome Enterprise startup URLs policy: https://chromeenterprise.google/intl/en_au/policies/restore-on-startup-ur-ls/

@@ -25,7 +25,7 @@
 - `LIVE_RUNBOOK.md` — live execution sequence
 - `MERGE_RUNBOOK.md` — guarded merge sequence
 - `scripts/start-cdp-sidecar.sh` — launch non-destructive CDP sidecar
-- sidecar startup now opens the configured Qwen URL directly instead of a placeholder `about:blank` tab
+- sidecar startup now launches Chrome directly, suppresses crash-restore behavior, and opens the configured Qwen URL instead of a placeholder `about:blank` tab
 - live smoke checks reuse the same recovery path as normal runs, so `--smoke-live` validates the recovered browser session
 - `scripts/cdp-status.sh` — check CDP endpoint
 - attach mode reuses an existing blank tab when possible and leaves the attached tab open
