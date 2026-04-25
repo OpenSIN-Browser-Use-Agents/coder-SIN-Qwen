@@ -40,13 +40,15 @@ export CHROME_PROFILE="$HOME/Library/Application Support/Google/Chrome"
 export CHROME_PROFILE_DIRECTORY="Default"
 ```
 
-If you never want this repo to launch a second Chrome owner, attach to an already-running debug-enabled Chrome instead:
+If you never want this repo to touch the main Chrome owner, prepare the dedicated sidecar instead:
 
 ```bash
-export CHROME_CDP_URL="http://127.0.0.1:9222"
+export CHROME_REMOTE_DEBUGGING_PORT="9444"
+npm run cdp:start
+npm run cdp:status
 ```
 
-In attach mode the repo will try to reuse an existing blank tab first and will not auto-close the attached tab when the run finishes.
+The relay then attaches only to that prepared sidecar endpoint and will not auto-close the attached tab when the run finishes.
 
 ## 4. Use OpenCode
 
@@ -66,10 +68,12 @@ If your OpenCode global config contains the `coder-SIN-Qwen` agent entry, you ca
 
 The repo-local `/ask-qwen` entry calls `node ./index.js` directly.
 If your global OpenCode config also contains `/ask-qwen`, both paths use the same direct CLI strategy.
-The shared global launcher auto-detects a reachable local CDP endpoint first, so it can attach instead of launching a second Chrome owner when your main browser is already open.
+The shared global launcher prepares the sidecar CDP endpoint first, so it can attach instead of launching a broken second Chrome owner when your main browser is already open.
 
 The browser relay will auto-switch to `Qwen3.6-Max-Preview` before sending prompts.
 After each completed turn it will also re-assert `Qwen3.6-Max-Preview` so the same chat does not visually drift back to Plus.
+For auth, the relay now uses direct email/password login with Infisical-backed account credentials only.
+Prompt entry now uses keyboard-safe injection for ordinary messages and a faster insert path for very long prompts to avoid cut-off input.
 
 For repo-aware prompts, the relay includes GitHub URLs for the repo and relevant files plus curated official reference URLs for the detected stack.
 It also persists compact consult memory with `context_id`, `message_id`, and the previous summary in `.coder-sin-qwen-memory.json` by default.
@@ -152,22 +156,27 @@ npm run restore:last
 
 Screenshots from live checks are written to `artifacts/` by default.
 
-If `npm run smoke:live` fails with a profile lock message, close Chrome and rerun it.
-If you do not want to close Chrome, use CDP attach mode instead.
+If `npm run smoke:live` fails, inspect `artifacts/` and rerun the sidecar preparation flow instead of closing your main Chrome.
 
-Or start a separate debug sidecar that leaves your main Chrome alone:
+The only allowed browser path is the fallback sidecar CDP attach. The relay prepares the sidecar and attaches to it automatically:
 
 ```bash
-export CHROME_REMOTE_DEBUGGING_PORT="9335"
 npm run cdp:start
 npm run cdp:status
 ```
 
-If authentication does not survive the sidecar snapshot, retry with:
+The sidecar launch uses the Chrome binary directly, seeds cloned startup URLs, suppresses crash-restore/search-choice behavior, and opens `QWEN_URL` directly (default: `https://chat.qwen.ai`).
+The Qwen auth flow now clicks the sign-in entry when needed, uses email/password login, and waits for the assistant reply before returning.
+`--smoke-live` now uses the same recovery path as normal runs, so it can verify the recovered sidecar attach path end-to-end.
+Account rotation state is stored only as non-secret metadata in `artifacts/qwen-account-state.json` by default.
+
+If you explicitly need more copied non-secret profile state, retry with:
 
 ```bash
 export CHROME_SIDECAR_SYNC_MODE=full
 ```
+
+To seed Infisical-backed Qwen accounts for this repo, use the path `/opensin/coder-sin-qwen` with env names like `QWEN_ACCOUNT_1_EMAIL`, `QWEN_ACCOUNT_1_PASSWORD`, `QWEN_ACCOUNT_2_EMAIL`, `QWEN_ACCOUNT_2_PASSWORD`, `QWEN_ACCOUNT_3_EMAIL`, and `QWEN_ACCOUNT_3_PASSWORD`.
 
 ## 10. Live-run preparation
 

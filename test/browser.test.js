@@ -1,6 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildConversationFollowUpPrompt, buildPromptPayload, resolveChromeConnectionConfig, resolveChromeLaunchConfig, shouldContinueConversation, summarizeSelectorReport, withRetry } from '../browser.js';
+import { buildConversationFollowUpPrompt, buildPromptPayload, createBrowserSessionCloser, hasBlockingAuthOverlay, resolveChromeConnectionConfig, resolveChromeLaunchConfig, shouldContinueConversation, summarizeSelectorReport, withRetry } from '../browser.js';
+
+function createLocatorStub(visibleMap, selector) {
+  return {
+    first() {
+      return this;
+    },
+    async count() {
+      return visibleMap.has(selector) ? 1 : 0;
+    },
+    async isVisible() {
+      return Boolean(visibleMap.get(selector));
+    }
+  };
+}
+
+function createPageStub(visibleEntries = []) {
+  const visibleMap = new Map(visibleEntries);
+  return {
+    locator(selector) {
+      return createLocatorStub(visibleMap, selector);
+    }
+  };
+}
 
 test('builds prompt payload strings', () => {
   // Objects should become a normal readable operator message instead of a raw JSON blob.
@@ -112,18 +135,26 @@ test('enables attach mode when CDP url is configured', () => {
   // Attach mode is the non-destructive path when the operator keeps Chrome open.
   const previousProfile = process.env.CHROME_PROFILE;
   const previousCdp = process.env.CHROME_CDP_URL;
+  const previousPort = process.env.CHROME_REMOTE_DEBUGGING_PORT;
+  const previousAttach = process.env.CHROME_ATTACH_MODE;
   process.env.CHROME_PROFILE = '/tmp/Chrome/Default';
-  process.env.CHROME_CDP_URL = 'http://127.0.0.1:9222';
+  process.env.CHROME_REMOTE_DEBUGGING_PORT = '9444';
+  process.env.CHROME_CDP_URL = 'http://127.0.0.1:9444';
+  process.env.CHROME_ATTACH_MODE = '1';
 
   try {
     const config = resolveChromeConnectionConfig();
     assert.equal(config.mode, 'attach');
-    assert.equal(config.cdpUrl, 'http://127.0.0.1:9222');
+    assert.equal(config.cdpUrl, 'http://127.0.0.1:9444');
   } finally {
     if (previousProfile === undefined) delete process.env.CHROME_PROFILE;
     else process.env.CHROME_PROFILE = previousProfile;
     if (previousCdp === undefined) delete process.env.CHROME_CDP_URL;
     else process.env.CHROME_CDP_URL = previousCdp;
+    if (previousPort === undefined) delete process.env.CHROME_REMOTE_DEBUGGING_PORT;
+    else process.env.CHROME_REMOTE_DEBUGGING_PORT = previousPort;
+    if (previousAttach === undefined) delete process.env.CHROME_ATTACH_MODE;
+    else process.env.CHROME_ATTACH_MODE = previousAttach;
   }
 });
 
@@ -139,4 +170,30 @@ test('builds a fresh follow-up prompt from the original request and reply', () =
   assert.match(prompt, /Refine your previous answer using one same-chat follow-up turn\./);
   assert.match(prompt, /Previous answer:/);
   assert.match(prompt, /run verify/);
+});
+
+test('closes attached browser connections without closing Chrome', async () => {
+  let closed = 0;
+  const attached = {
+    async close() {
+      closed += 1;
+    }
+  };
+
+  await createBrowserSessionCloser(attached)();
+  assert.equal(closed, 1);
+});
+
+test('detects blocking auth overlays before treating chat as ready', async () => {
+  const page = createPageStub([
+    ['text=Willkommen', true],
+    ['button:has-text("Registrieren")', true]
+  ]);
+
+  assert.equal(await hasBlockingAuthOverlay(page), true);
+});
+
+test('does not flag normal chat pages as blocking auth overlays', async () => {
+  const page = createPageStub();
+  assert.equal(await hasBlockingAuthOverlay(page), false);
 });

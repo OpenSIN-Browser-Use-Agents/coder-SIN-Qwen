@@ -14,32 +14,17 @@ Prepare and execute a real browser-backed Qwen run without losing diagnostics.
 
 ## If Chrome must remain open
 
-Use attach mode:
+Use the prepared sidecar path only:
 
 ```bash
-export CHROME_CDP_URL="http://127.0.0.1:9222"
-```
-
-or:
-
-```bash
-export CHROME_REMOTE_DEBUGGING_PORT="9222"
-```
-
-This keeps the existing Chrome process alive and opens a temporary tab for automation.
-
-If you do not already have a debug-enabled Chrome instance, start a separate sidecar instead:
-
-```bash
-export CHROME_REMOTE_DEBUGGING_PORT="9335"
+export CHROME_REMOTE_DEBUGGING_PORT="9444"
 npm run cdp:start
 npm run cdp:status
-export CHROME_CDP_URL="http://127.0.0.1:9335"
 ```
 
-This does not close or reuse the main Chrome process; it launches a separate debug copy from a profile snapshot.
+The relay will attach to that sidecar endpoint and keep the main Chrome process alone.
 
-Default sidecar sync mode is `minimal` for speed. If the copied session is missing auth state, set `CHROME_SIDECAR_SYNC_MODE=full` and restart the sidecar.
+Default sidecar sync mode is `none` to avoid copying live cookies or login databases. If you explicitly need copied profile state, set `CHROME_SIDECAR_SYNC_MODE=minimal` or `CHROME_SIDECAR_SYNC_MODE=full` and restart the sidecar.
 
 ## If live smoke fails
 

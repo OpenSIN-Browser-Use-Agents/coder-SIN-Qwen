@@ -120,13 +120,7 @@ Live-run preparation:
 npm run live:prepare
 ```
 
-Preferred path: attach to a debug-enabled **real Default profile** first.
-
-```bash
-export CHROME_CDP_URL="http://127.0.0.1:9335"
-```
-
-If that is unavailable, use a dedicated non-destructive sidecar instead of touching the main browser owner:
+Use the dedicated non-destructive sidecar path; the relay prepares it and attaches by CDP:
 
 ```bash
 export CHROME_REMOTE_DEBUGGING_PORT="9444"
@@ -134,9 +128,13 @@ npm run cdp:start
 export CHROME_CDP_URL="http://127.0.0.1:9444"
 ```
 
+The sidecar now launches the Chrome binary directly, seeds the cloned profile's startup URLs, suppresses crash-restore and search-engine-choice prompts, and opens the Qwen chat URL directly.
+The auth flow clicks the Qwen sign-in entry when needed, uses direct email/password login, and waits for a real assistant reply before returning.
+Live smoke checks now reuse the same recovery path as normal runs, so `--smoke-live` can validate the authenticated sidecar/attach flow instead of failing on a locked Default profile.
+
 By default the sidecar uses **no profile sync** for the fastest and least fragile recovery path. Set `CHROME_SIDECAR_SYNC_MODE=minimal` or `CHROME_SIDECAR_SYNC_MODE=full` only if you explicitly need copied profile state.
 
-The shared launcher now probes known local CDP endpoints first, preferring the classic Default-profile attach path on `9335`. Only if no attachable endpoint is reachable will it attempt the non-destructive sidecar fallback on `9444`. If that recovery path cannot produce a live CDP endpoint within the bounded startup window, the relay now fails fast with a clear message instead of silently falling back to a broken profile launch.
+The shared launcher prepares only the sidecar CDP endpoint on `9444` (or your configured `CHROME_REMOTE_DEBUGGING_PORT`). If that recovery path cannot produce a live CDP endpoint within the bounded startup window, the relay fails fast with a clear message instead of silently falling back to a broken startup method.
 
 ## Browser setup
 
@@ -162,17 +160,15 @@ export CHROME_PROFILE="$HOME/Library/Application Support/Google/Chrome"
 export CHROME_PROFILE_DIRECTORY="Default"
 ```
 
-If Chrome must stay open, prefer attach mode instead of launching a second profile owner:
+The only allowed browser path is the fallback sidecar CDP attach. The relay sets `CHROME_ATTACH_MODE=1` and `CHROME_CDP_URL` internally during preparation:
 
 ```bash
-export CHROME_CDP_URL="http://127.0.0.1:9222"
-# or
-export CHROME_REMOTE_DEBUGGING_PORT="9222"
+export CHROME_REMOTE_DEBUGGING_PORT="9444"
 ```
 
-In attach mode the repo reuses an existing blank tab when possible, keeps your Chrome session alive, and does not auto-close the attached tab afterward.
+Attach mode keeps the browser alive and does not auto-close the attached tab afterward.
 
-If the recovered session lands on the Qwen auth page, the relay now detects that state and attempts the controlled Google-login fallback path (`Anmelden` → `Fortfahren mit Google` → account/continue selectors).
+If the recovered session lands on the Qwen auth page, the relay uses direct email/password login with Infisical-backed Qwen accounts only.
 
 ## CI / release
 
@@ -183,6 +179,12 @@ If the recovered session lands on the Qwen auth page, the relay now detects that
 ## Environment
 
 - `QWEN_URL` — defaults to `https://chat.qwen.ai`
+- `QWEN_AUTH_METHOD` — defaults to `email_password` when Qwen account credentials are configured
+- `QWEN_ACCOUNT_ORDER` — preferred account order for fallback login (for example `2,3,1`)
+- `QWEN_ACCOUNT_STATE_FILE` — non-secret cooldown state file for account rotation (defaults to `artifacts/qwen-account-state.json`)
+- `QWEN_ACCOUNT_1_EMAIL` / `QWEN_ACCOUNT_1_PASSWORD` — direct login credentials for account 1
+- `QWEN_ACCOUNT_2_EMAIL` / `QWEN_ACCOUNT_2_PASSWORD` — direct login credentials for account 2
+- `QWEN_ACCOUNT_3_EMAIL` / `QWEN_ACCOUNT_3_PASSWORD` — direct login credentials for account 3
 - `CHROME_PROFILE` — Chrome profile folder for authenticated browser runs
 - `CHROME_PROFILE_DIRECTORY` — explicit Chrome profile name when `CHROME_PROFILE` points at the user-data root
 - `CHROME_CDP_URL` — attach to an already-running Chrome debug endpoint
@@ -207,13 +209,14 @@ Run `/ask-qwen` from OpenCode through the repo-local `./.opencode/opencode.json`
 See `INSTALL.md` for the full setup.
 
 The global OpenCode config exposes the canonical `/ask-qwen` command, which calls `node ./index.js` directly. The repo-local config follows that same direct-CLI path instead of relying on a shell wrapper.
-The shared global launcher now also auto-detects a reachable local CDP endpoint (for example `127.0.0.1:9335`) before falling back to browser launch, which avoids Chrome profile-lock failures when your main browser is already running.
+The shared global launcher now prepares the reachable local sidecar CDP endpoint before browser work begins, which avoids Chrome profile-lock failures when your main browser is already running.
 
 OpenCode can also expose `coder-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
 
 The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
 It also re-asserts `Qwen3.6-Max-Preview` after each completed turn so the active chat stays pinned to the intended model.
 Before each send it also enforces the Qwen thinking selector onto `Denken` / `Thinking`.
+Prompt entry now prefers keyboard-safe injection and falls back to a faster text-insert path for very long prompts so chat content is less likely to be cut off.
 
 The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
 

@@ -18,13 +18,15 @@
 - add `modul-qwen-autotraining` and `cli-autotraining.js` for Qwen-guided self-improvement snapshots and suggestions
 - add `lifecycle.js` for bounded graceful shutdown and resource cleanup across CLI/browser flows
 - enforce the Qwen thinking selector onto `Denken` / `Thinking` before each send
+- add keyboard-safe prompt injection with a faster insert fallback for long prompts so Qwen messages are less likely to truncate
 - add external-project mode with `--project-root`, issue URLs, capability manifests, and private-repo attachment candidates
 - add launcher-side CDP recovery that probes endpoints and can auto-start the sidecar before retrying attach
 - make CDP recovery fail fast when no live endpoint can be established, instead of falling back to a broken locked-profile launch
-- make sidecar startup itself bounded and self-verifying so recovery does not hang indefinitely on about:blank launches
-- switch the recovery sidecar to a more reliable macOS `open -na` launch path and a cleaner default debug port (`9444`)
-- restore `9335` Default-profile attach as the preferred primary path, with `9444` sidecar kept as fallback only
-- detect unauthenticated Qwen auth pages and attempt a controlled Google-login fallback flow
+- make sidecar startup itself bounded and self-verifying so recovery does not hang indefinitely on blank launches
+- switch the recovery sidecar to a direct Chrome binary launch path with cloned startup URLs, crash-restore suppression, and a cleaner default debug port (`9444`)
+- add `--disable-search-engine-choice-screen` to Chrome launch paths to keep startup deterministic on newer builds
+- enforce the sidecar CDP attach path as the only supported runtime browser path
+- prefer direct email/password Qwen auth with Infisical-backed account rotation only
 - prefer auto-attach to a reachable local CDP endpoint in the shared launcher to avoid Chrome profile-lock failures
 
 ## 0.1.0

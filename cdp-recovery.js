@@ -1,27 +1,53 @@
 import fs from 'node:fs/promises';
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
+
+const DEFAULT_QWEN_URL = 'https://chat.qwen.ai';
+const BLOCKED_SIDECAR_ITEMS = new Set([
+  'Cookies',
+  'Cookies-journal',
+  'Network',
+  'Login Data',
+  'Login Data For Account',
+  'Login Data-journal',
+  'Login Data For Account-journal',
+  'Web Data',
+  'Web Data-journal',
+  'Safe Browsing',
+  'Safe Browsing Cookies',
+  'Safe Browsing Cookies-journal',
+  'IndexedDB',
+  'Local Storage',
+  'Session Storage',
+  'Storage',
+  'Service Worker',
+  'Sessions',
+  'Local State'
+]);
+
+export function resolveStartupUrl(env = process.env) {
+  return String(env.QWEN_URL || DEFAULT_QWEN_URL).trim() || DEFAULT_QWEN_URL;
+}
+
+export function resolveChromeBinaryPath(env = process.env, platform = process.platform) {
+  const explicit = String(env.CHROME_BIN || '').trim();
+  if (explicit) return explicit;
+  if (platform === 'darwin') return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  if (platform === 'win32') return 'chrome.exe';
+  return 'google-chrome';
+}
 
 export function buildCandidateCdpUrls(env = process.env) {
+  const sidecarPort = String(env.CHROME_REMOTE_DEBUGGING_PORT || '9444').trim() || '9444';
   const urls = [
     env.CHROME_CDP_URL || '',
-    env.CHROME_REMOTE_DEBUGGING_PORT ? `http://127.0.0.1:${env.CHROME_REMOTE_DEBUGGING_PORT}` : '',
-    env.WEBAUTO_CDP_PORT ? `http://127.0.0.1:${env.WEBAUTO_CDP_PORT}` : '',
-    'http://127.0.0.1:9335',
-    'http://127.0.0.1:9222',
-    'http://127.0.0.1:9444'
+    `http://127.0.0.1:${sidecarPort}`
   ].filter(Boolean);
 
   return [...new Set(urls)];
-}
-
-export async function findReachableCdpUrl(env = process.env) {
-  for (const candidate of buildCandidateCdpUrls(env)) {
-    if (await isReachableCdp(candidate)) return candidate;
-  }
-  return '';
 }
 
 export async function isReachableCdp(baseUrl) {
@@ -37,19 +63,15 @@ export async function isReachableCdp(baseUrl) {
 }
 
 export async function ensureReachableCdp({ repoRoot, env = process.env, timeoutMs = 20_000 } = {}) {
-  const existing = await findReachableCdpUrl(env);
-  if (existing) {
-    if (isSidecarFallbackUrl(existing)) {
-      const sidecarUserDataDir = resolveSidecarUserDataDir(repoRoot, env);
-      return {
-        ok: true,
-        cdpUrl: existing,
-        startedSidecar: true,
-        sidecarUserDataDir,
-        profileDirectory: env.CHROME_PROFILE_DIRECTORY || 'Default'
-      };
-    }
-    return { ok: true, cdpUrl: existing, startedSidecar: false };
+  const sidecarUrl = `http://127.0.0.1:${env.CHROME_REMOTE_DEBUGGING_PORT || '9444'}`;
+  if (await isReachableCdp(sidecarUrl)) {
+    return {
+      ok: true,
+      cdpUrl: sidecarUrl,
+      startedSidecar: true,
+      sidecarUserDataDir: resolveSidecarUserDataDir(repoRoot, env),
+      profileDirectory: env.CHROME_PROFILE_DIRECTORY || 'Default'
+    };
   }
 
   if (!repoRoot) {
@@ -59,15 +81,31 @@ export async function ensureReachableCdp({ repoRoot, env = process.env, timeoutM
   const started = await startSidecar(repoRoot, env);
   if (!started.ok) return { ok: false, cdpUrl: '', startedSidecar: false, error: started.error };
 
-  const resolved = await waitForReachableCdp(buildCandidateCdpUrls(env), timeoutMs);
+  const resolved = await waitForReachableCdp([sidecarUrl], timeoutMs);
   if (resolved) return { ok: true, cdpUrl: resolved, startedSidecar: true, sidecarUserDataDir: started.userDataDir, profileDirectory: started.profileDirectory };
 
-  // Even if CDP attach is not usable, the sidecar clone can still be launched directly as an isolated browser context.
-  if (started.userDataDir) {
-    return { ok: true, cdpUrl: '', startedSidecar: true, sidecarUserDataDir: started.userDataDir, profileDirectory: started.profileDirectory };
+  return { ok: false, cdpUrl: '', startedSidecar: true, error: `No reachable CDP endpoint found after ${timeoutMs}ms` };
+}
+
+export async function prepareChromeConnectionForRun({ repoRoot = process.cwd() } = {}) {
+  const launchConfig = resolveChromeConnectionConfig();
+  const lockState = detectChromeProfileLock(launchConfig);
+  const recovery = await ensureReachableCdp({ repoRoot, env: process.env });
+  if (recovery.ok && recovery.cdpUrl) {
+    process.env.CHROME_ATTACH_MODE = '1';
+    process.env.CHROME_CDP_URL = recovery.cdpUrl;
+    return {
+      prepared: true,
+      launchConfig,
+      lockState,
+      recovery,
+      mode: 'attach',
+      sidecarUserDataDir: recovery.sidecarUserDataDir,
+      profileDirectory: recovery.profileDirectory || 'Default'
+    };
   }
 
-  return { ok: false, cdpUrl: '', startedSidecar: true, error: `No reachable CDP endpoint found after ${timeoutMs}ms` };
+  throw new Error(`No reachable sidecar CDP endpoint could be prepared. ${recovery.error || 'Start the sidecar or export CHROME_CDP_URL manually.'}`.trim());
 }
 
 export async function waitForReachableCdp(candidates, timeoutMs = 20_000) {
@@ -83,9 +121,12 @@ export async function waitForReachableCdp(candidates, timeoutMs = 20_000) {
 
 async function startSidecar(repoRoot, env) {
   try {
+    const profileDirectory = await detectBestChromeProfileDirectory(env);
     const recoveryEnv = {
       ...env,
-      CHROME_REMOTE_DEBUGGING_PORT: env.CHROME_REMOTE_DEBUGGING_PORT || '9444'
+      CHROME_REMOTE_DEBUGGING_PORT: env.CHROME_REMOTE_DEBUGGING_PORT || '9444',
+      CHROME_PROFILE_DIRECTORY: profileDirectory,
+      CHROME_SIDECAR_SYNC_MODE: env.CHROME_SIDECAR_SYNC_MODE || 'none'
     };
     const launched = await launchSidecarDirectly(repoRoot, recoveryEnv, Number(env.CHROME_SIDECAR_START_TIMEOUT_MS || 25000));
     return { ok: true, ...launched };
@@ -98,30 +139,36 @@ async function launchSidecarDirectly(repoRoot, env, timeoutMs) {
   const port = env.CHROME_REMOTE_DEBUGGING_PORT || '9444';
   const profileDirectory = env.CHROME_PROFILE_DIRECTORY || 'Default';
   const userDataDir = resolveSidecarUserDataDir(repoRoot, env);
+  const startupUrl = resolveStartupUrl(env);
   const sidecarRoot = path.dirname(userDataDir);
   const profileDir = path.join(userDataDir, profileDirectory);
   await fs.rm(sidecarRoot, { recursive: true, force: true }).catch(() => {});
-  await fs.mkdir(profileDir, { recursive: true });
+  await fs.mkdir(profileDir, { recursive: true, mode: 0o700 });
+  await fs.chmod(sidecarRoot, 0o700).catch(() => {});
+  await fs.chmod(userDataDir, 0o700).catch(() => {});
+  await fs.chmod(profileDir, 0o700).catch(() => {});
 
-  if (process.platform === 'darwin') {
-    await runSpawn('open', ['-na', 'Google Chrome', '--args',
-      `--remote-debugging-port=${port}`,
-      `--user-data-dir=${userDataDir}`,
-      `--profile-directory=${profileDirectory}`,
-      '--no-first-run',
-      '--no-default-browser-check',
-      'about:blank'
-    ], repoRoot, env, timeoutMs);
-  } else {
-    await runSpawn('google-chrome', [
-      `--remote-debugging-port=${port}`,
-      `--user-data-dir=${userDataDir}`,
-      `--profile-directory=${profileDirectory}`,
-      '--no-first-run',
-      '--no-default-browser-check',
-      'about:blank'
-    ], repoRoot, env, timeoutMs);
-  }
+  await cloneChromeProfileState({
+    sourceProfile: env.CHROME_PROFILE || defaultChromeUserDataDir(),
+    profileDirectory,
+    userDataDir,
+    profileDir,
+    syncMode: env.CHROME_SIDECAR_SYNC_MODE || 'none',
+    startupUrl
+  });
+  await assertNoSensitiveSidecarArtifacts(userDataDir, profileDir);
+
+  await runSpawn(resolveChromeBinaryPath(env), [
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userDataDir}`,
+    `--profile-directory=${profileDirectory}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-search-engine-choice-screen',
+    '--disable-session-crashed-bubble',
+    '--disable-features=SessionRestore,RestoreBackgroundContents',
+    startupUrl
+  ], repoRoot, env, timeoutMs);
 
   return {
     userDataDir,
@@ -135,8 +182,148 @@ function resolveSidecarUserDataDir(repoRoot, env) {
   return path.join(sidecarRoot, 'user-data');
 }
 
-function isSidecarFallbackUrl(url) {
-  return /127\.0\.0\.1:9444$/u.test(String(url || ''));
+async function cloneChromeProfileState({ sourceProfile, profileDirectory, userDataDir, profileDir, syncMode, startupUrl }) {
+  const sourcePath = path.resolve(sourceProfile);
+  const sourceUserDataDir = looksLikeProfileDir(sourcePath) ? path.dirname(sourcePath) : sourcePath;
+  const sourceProfileDir = looksLikeProfileDir(sourcePath) ? sourcePath : path.join(sourcePath, profileDirectory);
+
+  if (syncMode === 'none') {
+    await seedChromeStartupPreferences(profileDir, startupUrl);
+    return;
+  }
+
+  const rootItems = ['First Run', 'Last Version'];
+  const minimalItems = [
+    'Preferences',
+    'Secure Preferences'
+  ];
+
+  for (const name of rootItems) {
+    await copyIfExists(path.join(sourceUserDataDir, name), path.join(userDataDir, name));
+  }
+
+  const profileItems = syncMode === 'full'
+    ? await listCopyableItems(sourceProfileDir)
+    : minimalItems;
+
+  for (const name of profileItems) {
+    await copyIfExists(path.join(sourceProfileDir, name), path.join(profileDir, name));
+  }
+
+  await seedChromeStartupPreferences(profileDir, startupUrl);
+  await assertNoSensitiveSidecarArtifacts(userDataDir, profileDir);
+}
+
+export async function seedChromeStartupPreferences(profileDir, startupUrl) {
+  const preferencesPath = path.join(profileDir, 'Preferences');
+  let prefs = {};
+
+  try {
+    const raw = await fs.readFile(preferencesPath, 'utf8');
+    prefs = raw.trim() ? JSON.parse(raw) : {};
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+
+  if (!prefs.session || typeof prefs.session !== 'object' || Array.isArray(prefs.session)) {
+    prefs.session = {};
+  }
+
+  prefs.session.restore_on_startup = 4;
+  prefs.session.startup_urls = [startupUrl];
+  prefs.homepage = startupUrl;
+  prefs.homepage_is_newtabpage = false;
+
+  await fs.mkdir(path.dirname(preferencesPath), { recursive: true });
+  await fs.writeFile(preferencesPath, `${JSON.stringify(prefs, null, 2)}\n`);
+}
+
+async function listCopyableItems(sourceProfileDir) {
+  const entries = await fs.readdir(sourceProfileDir, { withFileTypes: true });
+  return entries
+    .map((entry) => entry.name)
+    .filter((name) => !['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'RunningChromeVersion', 'Crashpad', 'GPUCache', 'GrShaderCache', 'ShaderCache', 'Code Cache', 'DawnCache', 'Visited Links', 'chrome_debug.log'].includes(name))
+    .filter((name) => !BLOCKED_SIDECAR_ITEMS.has(name));
+}
+
+async function assertNoSensitiveSidecarArtifacts(userDataDir, profileDir) {
+  const candidates = [userDataDir, profileDir];
+  for (const baseDir of candidates) {
+    for (const name of BLOCKED_SIDECAR_ITEMS) {
+      try {
+        await fs.stat(path.join(baseDir, name));
+        throw new Error(`Blocked sidecar artifact detected: ${path.join(baseDir, name)}`);
+      } catch (error) {
+        if (error?.code === 'ENOENT') continue;
+        throw error;
+      }
+    }
+  }
+}
+
+async function copyIfExists(source, destination) {
+  try {
+    const stat = await fs.stat(source);
+    if (stat.isDirectory()) {
+      await fs.cp(source, destination, { recursive: true, force: true, errorOnExist: false });
+    } else {
+      await fs.mkdir(path.dirname(destination), { recursive: true });
+      await fs.copyFile(source, destination);
+    }
+  } catch {
+    // Ignore missing files in partial profile copies.
+  }
+}
+
+async function detectBestChromeProfileDirectory(env) {
+  const explicit = String(env.CHROME_PROFILE_DIRECTORY || '').trim();
+  if (explicit && explicit.toLowerCase() !== 'auto') return explicit;
+
+  const userDataDir = String(env.CHROME_PROFILE || '').trim() || defaultChromeUserDataDir();
+  const root = looksLikeProfileDir(userDataDir) ? path.dirname(userDataDir) : userDataDir;
+  let entries;
+  try {
+    entries = await fs.readdir(root, { withFileTypes: true });
+  } catch {
+    return 'Default';
+  }
+
+  const scored = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const name = entry.name;
+    if (!/^(Default|Profile\s+\d+|Guest Profile|System Profile)$/u.test(name)) continue;
+    const qwenDb = path.join(root, name, 'IndexedDB', 'https_chat.qwen.ai_0.indexeddb.leveldb');
+    let size = 0;
+    try {
+      const files = await fs.readdir(qwenDb, { withFileTypes: true });
+      for (const file of files) {
+        if (!file.isFile()) continue;
+        const stat = await fs.stat(path.join(qwenDb, file.name));
+        size += stat.size;
+      }
+    } catch {
+      size = 0;
+    }
+    scored.push({ name, size });
+  }
+
+  scored.sort((a, b) => b.size - a.size || (a.name === 'Default' ? -1 : 1));
+  return scored[0]?.name || 'Default';
+}
+
+function defaultChromeUserDataDir() {
+  const platform = os.platform();
+  return platform === 'darwin'
+    ? path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome')
+    : platform === 'win32'
+      ? path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'User Data')
+      : path.join(os.homedir(), '.config', 'google-chrome');
+}
+
+function looksLikeProfileDir(value) {
+  const name = path.basename(value);
+  return /^(Default|Profile\s+\d+|Guest Profile|System Profile)$/u.test(name);
 }
 
 function runSpawn(command, args, cwd, env, timeoutMs) {
@@ -164,21 +351,4 @@ function runSpawn(command, args, cwd, env, timeoutMs) {
 
 export function toFileUrl(filePath) {
   return pathToFileURL(filePath).href;
-}
-
-export function terminateChromeForUserDataDir(userDataDir) {
-  if (!userDataDir) return;
-  try {
-    const output = execFileSync('pgrep', ['-fal', 'Google Chrome'], { encoding: 'utf8' }).trim();
-    if (!output) return;
-    for (const line of output.split('\n')) {
-      if (!line.includes(userDataDir)) continue;
-      const pid = Number(line.trim().split(/\s+/u)[0]);
-      if (Number.isFinite(pid)) {
-        try { process.kill(pid, 'SIGTERM'); } catch {}
-      }
-    }
-  } catch {
-    // Ignore missing process-list tools.
-  }
 }

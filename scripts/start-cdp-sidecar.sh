@@ -5,43 +5,85 @@ set -euo pipefail
 ROOT_DIR="$(pwd)"
 PORT="${CHROME_REMOTE_DEBUGGING_PORT:-9444}"
 CDP_URL="http://127.0.0.1:${PORT}"
+START_URL="${QWEN_URL:-https://chat.qwen.ai}"
 SOURCE_PROFILE="${CHROME_PROFILE:-$HOME/Library/Application Support/Google/Chrome/Default}"
-PROFILE_DIRECTORY="${CHROME_PROFILE_DIRECTORY:-Default}"
+PROFILE_DIRECTORY="${CHROME_PROFILE_DIRECTORY:-auto}"
 SIDECAR_ROOT="${CHROME_SIDECAR_ROOT:-${TMPDIR:-/tmp}/coder-sin-qwen-sidecar}"
 TARGET_USER_DATA_DIR="$SIDECAR_ROOT/user-data"
-TARGET_PROFILE_DIR="$TARGET_USER_DATA_DIR/$PROFILE_DIRECTORY"
 SYNC_MODE="${CHROME_SIDECAR_SYNC_MODE:-none}"
-CHROME_BIN="${CHROME_BIN:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
+if [[ -z "${CHROME_BIN:-}" ]]; then
+  if [[ "$OSTYPE" == darwin* ]]; then
+    CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  else
+    CHROME_BIN="google-chrome"
+  fi
+fi
 SIDECAR_LOG="${CHROME_SIDECAR_LOG:-$SIDECAR_ROOT/chrome-sidecar.log}"
 START_TIMEOUT_SECONDS="${CHROME_SIDECAR_START_TIMEOUT_SECONDS:-20}"
+SELECTED_PROFILE_FILE="$SIDECAR_ROOT/selected-profile.txt"
 
-mkdir -p "$TARGET_PROFILE_DIR"
+mkdir -p "$TARGET_USER_DATA_DIR"
+chmod 700 "$SIDECAR_ROOT" "$TARGET_USER_DATA_DIR" 2>/dev/null || true
+
+if [[ ! -x "$CHROME_BIN" ]] && ! command -v "$CHROME_BIN" >/dev/null 2>&1; then
+  echo "Chrome binary not found: $CHROME_BIN"
+  exit 1
+fi
 
 # Python copy keeps the script portable and avoids rsync edge-cases on some systems.
 python3 - <<PY
 from pathlib import Path
 import shutil
+import json
+import sys
 
 source_profile = Path(r'''$SOURCE_PROFILE''')
 profile_directory = r'''$PROFILE_DIRECTORY'''
-target_profile = Path(r'''$TARGET_PROFILE_DIR''')
 target_user_data_dir = Path(r'''$TARGET_USER_DATA_DIR''')
 sync_mode = r'''$SYNC_MODE'''
+selected_profile_file = Path(r'''$SELECTED_PROFILE_FILE''')
 
-source_dir = source_profile if source_profile.name in {'Default', profile_directory} else source_profile / profile_directory
-source_user_data_dir = source_dir.parent if source_dir.name in {'Default', profile_directory} else source_dir
+chrome_root = source_profile.parent if source_profile.name in {'Default', 'Guest Profile', 'System Profile'} or source_profile.name.startswith('Profile ') else source_profile
+
+def detect_best_profile(root: Path) -> str:
+    scored = []
+    for child in root.iterdir():
+        if not child.is_dir():
+            continue
+        name = child.name
+        if not (name == 'Default' or name.startswith('Profile ') or name in {'Guest Profile', 'System Profile'}):
+            continue
+        qwen_db = child / 'IndexedDB' / 'https_chat.qwen.ai_0.indexeddb.leveldb'
+        size = 0
+        if qwen_db.exists():
+            for item in qwen_db.iterdir():
+                if item.is_file():
+                    size += item.stat().st_size
+        scored.append((size, name))
+    scored.sort(key=lambda item: (-item[0], item[1] != 'Default', item[1]))
+    return scored[0][1] if scored else 'Default'
+
+if profile_directory == 'auto':
+    profile_directory = detect_best_profile(chrome_root)
+
+selected_profile_file.parent.mkdir(parents=True, exist_ok=True)
+selected_profile_file.write_text(profile_directory, encoding='utf-8')
+
+source_dir = chrome_root / profile_directory
+source_user_data_dir = chrome_root
+target_profile = target_user_data_dir / profile_directory
 
 full_items = None
 minimal_items = [
     'Preferences',
-    'Secure Preferences',
-    'Cookies',
-    'Cookies-journal',
-    'Local Storage',
-    'Sessions',
-    'Web Data',
-    'Web Data-journal'
+    'Secure Preferences'
 ]
+blocked_items = {
+    'Cookies', 'Cookies-journal', 'Network', 'Login Data', 'Login Data For Account',
+    'Login Data-journal', 'Login Data For Account-journal', 'Web Data', 'Web Data-journal',
+    'Safe Browsing', 'Safe Browsing Cookies', 'Safe Browsing Cookies-journal', 'IndexedDB',
+    'Local Storage', 'Session Storage', 'Storage', 'Service Worker', 'Sessions', 'Local State'
+}
 
 if not source_dir.exists():
     raise SystemExit(f'Source profile not found: {source_dir}')
@@ -52,13 +94,13 @@ elif sync_mode == 'full':
     items = [p.name for p in source_dir.iterdir() if p.name not in {
         'SingletonLock', 'SingletonCookie', 'SingletonSocket', 'Crashpad',
         'Code Cache', 'GPUCache', 'ShaderCache', 'DawnCache', 'Cache'
-    }]
+    } and p.name not in blocked_items]
 else:
     items = minimal_items
 
 target_profile.mkdir(parents=True, exist_ok=True)
 
-for name in ('Local State', 'First Run', 'Last Version'):
+for name in ('First Run', 'Last Version'):
     src = source_user_data_dir / name
     dst = target_user_data_dir / name
     if not src.exists():
@@ -74,6 +116,8 @@ for name in ('Local State', 'First Run', 'Last Version'):
         shutil.copy2(src, dst)
 
 for name in items:
+    if name in blocked_items:
+        continue
     src = source_dir / name
     dst = target_profile / name
     if not src.exists():
@@ -88,28 +132,49 @@ for name in items:
     else:
         shutil.copy2(src, dst)
 
+preferences = target_profile / 'Preferences'
+try:
+    prefs = json.loads(preferences.read_text(encoding='utf-8')) if preferences.exists() else {}
+except json.JSONDecodeError:
+    prefs = {}
+
+if not isinstance(prefs.get('session'), dict):
+    prefs['session'] = {}
+
+prefs['session']['restore_on_startup'] = 4
+prefs['session']['startup_urls'] = [r'''$START_URL''']
+prefs['homepage'] = r'''$START_URL'''
+prefs['homepage_is_newtabpage'] = False
+
+preferences.write_text(json.dumps(prefs, indent=2) + '\n', encoding='utf-8')
+
+for base in (target_user_data_dir, target_profile):
+    for blocked in blocked_items:
+        if (base / blocked).exists():
+            print(f'Blocked sidecar artifact detected: {base / blocked}', file=sys.stderr)
+            sys.exit(1)
+
 print(f'Prepared sidecar profile: {target_profile}')
 PY
 
+chmod 700 "$SIDECAR_ROOT" "$TARGET_USER_DATA_DIR" "$TARGET_USER_DATA_DIR/$PROFILE_DIRECTORY" 2>/dev/null || true
+
 mkdir -p "$(dirname "$SIDECAR_LOG")"
 
-if [[ "$OSTYPE" == darwin* ]]; then
-  nohup open -na "Google Chrome" --args \
-    --remote-debugging-port="$PORT" \
-    --user-data-dir="$TARGET_USER_DATA_DIR" \
-    --profile-directory="$PROFILE_DIRECTORY" \
-    --no-first-run \
-    --no-default-browser-check \
-    about:blank >>"$SIDECAR_LOG" 2>&1 &
-else
-  nohup google-chrome \
-    --remote-debugging-port="$PORT" \
-    --user-data-dir="$TARGET_USER_DATA_DIR" \
-    --profile-directory="$PROFILE_DIRECTORY" \
-    --no-first-run \
-    --no-default-browser-check \
-    about:blank >>"$SIDECAR_LOG" 2>&1 &
+if [[ -f "$SELECTED_PROFILE_FILE" ]]; then
+  PROFILE_DIRECTORY="$(cat "$SELECTED_PROFILE_FILE")"
 fi
+
+nohup "$CHROME_BIN" \
+  --remote-debugging-port="$PORT" \
+  --user-data-dir="$TARGET_USER_DATA_DIR" \
+  --profile-directory="$PROFILE_DIRECTORY" \
+  --no-first-run \
+  --no-default-browser-check \
+  --disable-search-engine-choice-screen \
+  --disable-session-crashed-bubble \
+  --disable-features=SessionRestore,RestoreBackgroundContents \
+  "$START_URL" >>"$SIDECAR_LOG" 2>&1 &
 
 echo "CDP sidecar launch requested."
 echo "Export this before live runs:"

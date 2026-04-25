@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig, runBrowserE2ECheck } from './browser.js';
+import { prepareChromeConnectionForRun } from './cdp-recovery.js';
 import { writeLogEntry } from './logger.js';
 import { getScopedEnv } from './runtime-config.js';
 
@@ -43,6 +44,11 @@ export async function runSmokeCheck({ live = getScopedEnv('SMOKE_LIVE', '0') ===
 
   if (live) {
     try {
+      const preparation = await prepareChromeConnectionForRun({ repoRoot: process.cwd() });
+      if (preparation?.prepared) {
+        const modeLabel = preparation.mode === 'attach' ? 'CDP attach' : 'sidecar clone';
+        result.notes.push(`Live browser recovery prepared: ${modeLabel}.`);
+      }
       const liveResult = await runBrowserE2ECheck();
       result.notes.push(`Live browser check: ${liveResult.title || liveResult.url}`);
       result.live = liveResult;
