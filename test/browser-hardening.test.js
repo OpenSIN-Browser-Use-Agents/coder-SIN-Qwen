@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveHardeningFlags, safeInjectInput } from '../browser-hardening.js';
+import { assertCompleteReply, detectIncompleteReplyIssues, normalizeRenderedReplyText, resolveHardeningFlags, safeInjectInput } from '../browser-hardening.js';
 
 test('resolves hardening flags with safe input enabled by default', () => {
   const flags = resolveHardeningFlags({});
@@ -97,4 +97,37 @@ test('respects the opt-out flag', async () => {
 
   assert.equal(used, false);
   assert.deepEqual(calls, []);
+});
+
+test('rejects timeout and malformed completion payloads', () => {
+  assert.throws(() => assertCompleteReply({ text: 'partial result', timedOut: true }), /COMPLETION_TIMEOUT/);
+  assert.throws(() => assertCompleteReply(null), /INVALID_REPLY/);
+  assert.throws(() => assertCompleteReply({ text: '   ', timedOut: false }), /EMPTY_REPLY/);
+});
+
+test('rejects truncated or structurally broken replies', () => {
+  assert.throws(() => assertCompleteReply({ text: 'here is the implementation...', timedOut: false }), /TRUNCATED_REPLY/);
+  assert.throws(() => assertCompleteReply({ text: '```js\nconst x = 1;\n', timedOut: false }), /TRUNCATED_REPLY/);
+  assert.throws(() => assertCompleteReply({ text: 'function init() { return true;', timedOut: false }), /TRUNCATED_REPLY/);
+});
+
+test('normalizes code block extraction artifacts into complete replies', () => {
+  assert.equal(
+    assertCompleteReply({ text: 'bash\n1\n2\nnpm test -- test/wait-for-completion.test.js\nnpm run verify', timedOut: false }),
+    true
+  );
+  assert.deepEqual(detectIncompleteReplyIssues({ text: 'bash\n1\n2\nnpm run verify', timedOut: false }), []);
+});
+
+test('accepts complete plain text and code blocks', () => {
+  assert.equal(assertCompleteReply({ text: 'Done. Here is the result.', timedOut: false }), true);
+  assert.equal(assertCompleteReply({ text: '```js\nconst x = 1;\n```', timedOut: false }), true);
+  assert.equal(assertCompleteReply({ text: 'npm test -- test/wait-for-completion.test.js\nnpm run verify', timedOut: false }), true);
+});
+
+test('normalizes rendered code blocks with language labels and line numbers', () => {
+  assert.equal(
+    normalizeRenderedReplyText('bash\n1\nnpm test\n2\nnpm run verify'),
+    'npm test\nnpm run verify'
+  );
 });

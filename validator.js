@@ -1,3 +1,5 @@
+import { detectIncompleteReplyIssues } from './browser-hardening.js';
+
 const FLUFF_PATTERNS = [
   /\b(?:as an ai|language model|i'?m sorry|apologies|unfortunately|please note|keep in mind|let me know|feel free|hope this helps|in conclusion|to summarize)\b/giu,
   /^(?:here is|here's|below is|sure|certainly|of course|no problem|got it)\b/gimu,
@@ -9,15 +11,25 @@ const REPO_ACCESS_DENIAL_PATTERNS = [
   /\b(?:i (?:cannot|can't) inspect files|i do not have access to files)/iu
 ];
 
-export function validateConsultResponse({ reply, parsed, context }) {
+export function validateConsultResponse({ reply, parsed, context, completion = null }) {
   const text = String(reply || '').trim();
   const violations = [];
   const cleanedText = stripFluff(text);
   const fluff = detectFluff(text);
   const repoAware = typeof context === 'object' && context !== null;
+  const replyIssues = detectIncompleteReplyIssues({ text, timedOut: Boolean(completion?.softTimeout) });
 
   if (!text) {
     violations.push(makeViolation('completion', 'empty_reply', null, 'fail'));
+  }
+
+  if (Boolean(completion?.softTimeout)) {
+    violations.push(makeViolation('completion', 'completion_timeout', completion?.note || null, 'fail'));
+  }
+
+  const structuralIssues = replyIssues.filter((issue) => issue !== 'EMPTY_REPLY' && issue !== 'COMPLETION_TIMEOUT');
+  if (structuralIssues.length > 0) {
+    violations.push(makeViolation('completion', 'incomplete_reply', structuralIssues.join(','), 'fail'));
   }
 
   if (repoAware && REPO_ACCESS_DENIAL_PATTERNS.some((pattern) => pattern.test(text))) {
@@ -47,7 +59,9 @@ export function validateConsultResponse({ reply, parsed, context }) {
     metadata: {
       checked_at: new Date().toISOString(),
       reply_length: text.length,
-      plan: parsed?.plan || ''
+      plan: parsed?.plan || '',
+      completion_status: completion?.status || '',
+      completion_source: completion?.source || ''
     }
   };
 }
