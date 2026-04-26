@@ -24,7 +24,7 @@
 - prompt entry uses keyboard-safe injection for short messages and a faster insert path for long ones to reduce cutoff risk
 - auth now prefers direct email/password login with Infisical-backed Qwen accounts and rotates by cooldown/order state in `artifacts/qwen-account-state.json`
 - extra turns happen only when `--turns 2+` is requested, and they continue in the same chat
-- repo-aware prompts include repository/file URLs plus curated official reference URLs for the current stack; small ranked source-file attachments are uploaded locally for code turns, PDFs/text/logs can still be attached, and image files stay local-only; URL-bearing context is capped at 10 unique links by default (override with `SIN_CODER_QWEN_MAX_URLS` up to 25), decision history stays short, and completion detection can fall back to local screenshot OCR when the DOM drifts
+- repo-aware prompts include repository/file URLs plus curated official reference URLs for the current stack; small ranked source-file attachments are uploaded locally for code turns, PDFs/text/logs can still be attached, and image files stay local-only; URL-bearing context is capped at 10 unique links by default (override with `SIN_CODER_QWEN_MAX_URLS` up to 25), decision history stays short, and completion detection now fails closed when the final reply never stabilizes or looks structurally truncated
 - repo-aware consults persist `context_id`, `message_id`, and a compact previous summary in `.coder-sin-qwen-memory.json`
 - consult memory now uses a canonical `state_snapshot` envelope with metadata, mandate, decision history, constraints, and completion criteria
 - validator/critic review now checks constraints, completion criteria, and fluff before the final reply is returned
@@ -36,7 +36,12 @@
 - rate-limit tracking now records cooldowns plus a circuit breaker in `artifacts/qwen-account-state.json`
 - CDP attach now sets `PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR=1` so Playwright does not trip Browser.setDownloadBehavior on connect
 - assistant text stabilization now waits for a stable non-empty answer before the model selectors are reasserted
-- the browser input boundary now strips `/ask-qwen` and rejects CLI artifacts before typing into Qwen
+- consult memory persistence now writes atomically so interrupted runs do not corrupt `.coder-sin-qwen-memory.json`
+- CDP reachability checks now use one bounded probe helper with abort-based timeouts across attach/recovery flows
+- the browser input boundary now strips `/ask-qwen`, rejects CLI artifacts, and truncates oversized prompts before typing into Qwen
+- conversation-tree branching is now available through `--branch <nodeId>` and `--tree`, with local prompt-path expansion backed by `.coder-sin-qwen-conversations.json`
+- conversation-tree output now highlights the active/latest branch and JSON mode includes branch path + role history metadata for the new node
+- `--checkout <nodeId|latest|root|none>` persists the active conversation node locally, and `--prepare-commit` stages changes plus prints a commit-ready diff stat without creating a commit
 - `preflight.js` — dependency and env checks
 - `secrets-check.js` — secret presence checks
 - `SECRETS.md` — Infisical and env checklist

@@ -85,6 +85,7 @@ The browser input boundary now strips `/ask-qwen` and rejects CLI artifacts befo
 For repo-aware prompts, the relay includes GitHub URLs for the repo and relevant files plus curated official reference URLs for the detected stack.
 It also persists compact consult memory with `context_id`, `message_id`, and the previous summary in `.coder-sin-qwen-memory.json` by default.
 The persisted prompt state now follows a canonical `state_snapshot` envelope so future consults can resume from compact structured memory instead of raw chat history.
+Consult memory writes now use an atomic temp+rename path so interrupted runs do not leave partial JSON behind.
 Repo-aware replies now also pass through a deterministic validator/critic layer that can flag violations and strip obvious fluff before stdout is returned.
 When you invoke coder-SIN-Qwen from another repo, pass that target repo as `--project-root "$PWD"` (the global launcher now does this automatically).
 For public repos the relay sends repo/file/issue URLs plus provider docs and also uploads a small ranked set of relevant local source files; image files stay local-only; for private repos it uploads relevant local files instead.
@@ -98,6 +99,15 @@ If you explicitly want an extra same-chat follow-up, opt in with:
 
 ```bash
 node ./index.js --turns 2 "build a feature"
+```
+
+If you want to branch from an earlier local conversation node instead of continuing linearly:
+
+```bash
+node ./index.js --branch <node-id> "refine this branch"
+node ./index.js --tree
+node ./index.js --tree --branch <node-id>
+node ./index.js --checkout <node-id>
 ```
 
 Autotraining helper:
@@ -157,6 +167,10 @@ To force profile validation in preflight, set `SIN_CODER_QWEN_REQUIRE_PROFILE=1`
 If you want stable correlation across a whole run, set `SIN_CODER_QWEN_RUN_ID`, `SIN_CODER_QWEN_TRACE_ID`, and `SIN_CODER_QWEN_SPAN_ID` before invoking the CLI.
 
 Temporary public task packets can be controlled with `SIN_CODER_QWEN_PUBLIC_TASK_FILE=auto|always|off`.
+Oversized browser prompts are truncated at `SIN_CODER_QWEN_MAX_PROMPT_LENGTH` (default `12000`) and logged as `prompt_truncated` in JSONL output.
+Conversation-tree persistence is controlled with `SIN_CODER_QWEN_CONVERSATION_FILE` (default `.coder-sin-qwen-conversations.json`).
+`--json` output now includes the latest stored node id, active branch path, and flattened user/assistant history for the selected conversation branch.
+`--prepare-commit` stages all current repo changes and prints a diff summary without creating a commit; add `--dry-run` to inspect without staging.
 
 Rate-limit recovery is controlled with `QWEN_RATE_LIMIT_COOLDOWN_HOURS`, `QWEN_RATE_LIMIT_FAILURE_THRESHOLD`, and `QWEN_RATE_LIMIT_CIRCUIT_BREAKER_MINUTES`.
 
@@ -182,12 +196,12 @@ npm run cdp:status
 ```
 
 The sidecar launch uses the Chrome binary directly, seeds cloned startup URLs, suppresses crash-restore/search-choice behavior, and opens `QWEN_URL` directly (default: `https://chat.qwen.ai`).
-If a live CDP endpoint is already available, attach mode re-probes `/json/version`, logs the skip decision, and only then bypasses the cloned sidecar profile path check.
+If a live CDP endpoint is already available, attach mode re-probes `/json/version` through the bounded CDP probe helper, logs the skip decision, and only then bypasses the cloned sidecar profile path check.
 PDF/text/code attachments are eligible for upload; image files stay local-only and should be summarized before asking Qwen about them.
 Keep outbound URL-bearing context to 10 unique links per message so the relay stays within Qwen's practical prompt budget.
 If you truly need more room, set `SIN_CODER_QWEN_MAX_URLS` (the relay caps it at 25).
-If the Qwen UI finishes but the DOM stays flaky, the relay will use a local screenshot OCR fallback before giving up.
-The Qwen auth flow now clicks the sign-in entry when needed, uses email/password login, and waits for the assistant reply before returning.
+If the Qwen UI or extraction path stays flaky, the relay now fails closed on unstable/truncated replies instead of returning partial fallback output.
+The Qwen auth flow now clicks the sign-in entry when needed, uses email/password login, waits for the assistant reply before returning, and truncates oversized prompts before browser injection so input limits do not stall the UI.
 `--smoke-live` now uses the same recovery path as normal runs, so it can verify the recovered sidecar attach path end-to-end.
 Account rotation state is stored only as non-secret metadata in `artifacts/qwen-account-state.json` by default.
 That state file is also where the cooldown and circuit-breaker metadata lives, so it is safe to keep in artifacts but should not be committed.

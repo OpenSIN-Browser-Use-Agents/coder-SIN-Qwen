@@ -11,6 +11,7 @@ It does not “think” for you. It:
 
 If you explicitly need machine-readable output, use `--json` so the repo prints the parsed payload instead.
 For richer Qwen back-and-forth, the relay can take one short follow-up turn when the answer clearly suggests a useful next step.
+It can also persist a local conversation tree so later runs can branch from any earlier node instead of only continuing linearly.
 
 ## Files
 
@@ -59,6 +60,39 @@ Optional snapshot before run:
 
 ```bash
 node ./index.js --snapshot "Review the repo and propose the next implementation step"
+```
+
+Conversation tree branch from a previous node:
+
+```bash
+node ./index.js --branch <node-id> "Refine this branch"
+```
+
+Print the current conversation tree:
+
+```bash
+node ./index.js --tree
+```
+
+Highlight one existing branch while printing the tree:
+
+```bash
+node ./index.js --tree --branch <node-id>
+```
+
+Persistently switch the local active branch:
+
+```bash
+node ./index.js --checkout <node-id>
+node ./index.js --checkout latest
+node ./index.js --checkout none
+```
+
+Prepare a commit without creating one:
+
+```bash
+node ./index.js --prepare-commit
+node ./index.js --prepare-commit --dry-run
 ```
 
 Dry run:
@@ -201,6 +235,8 @@ If the recovered session lands on the Qwen auth page, the relay uses direct emai
 - `SIN_CODER_QWEN_LOG_FILE` — JSONL log destination
 - `SIN_CODER_QWEN_ARTIFACT_DIR` — screenshot output directory
 - `SIN_CODER_QWEN_MEMORY_FILE` — persistent consult memory file (defaults to `.coder-sin-qwen-memory.json`)
+- `SIN_CODER_QWEN_CONVERSATION_FILE` — local conversation-tree store (defaults to `.coder-sin-qwen-conversations.json`)
+- `SIN_CODER_QWEN_MAX_PROMPT_LENGTH` — browser-input ceiling before the relay truncates oversized prompts with a marker (defaults to `12000`)
 - `SIN_CODER_QWEN_AUTOTRAINING_FILE` — JSONL file for autotraining snapshots/suggestions
 - `SIN_CODER_QWEN_RUN_ID` / `SIN_CODER_QWEN_TRACE_ID` / `SIN_CODER_QWEN_SPAN_ID` / `SIN_CODER_QWEN_PARENT_SPAN_ID` / `SIN_CODER_QWEN_SESSION_ID` — trace and chat-session correlation fields written into logs, snapshots, and browser tab binding
 - `SIN_CODER_QWEN_PUBLIC_TASK_FILE` — `auto` (default), `always`, or `off` for temporary public Markdown task packets
@@ -215,12 +251,17 @@ If the recovered session lands on the Qwen auth page, the relay uses direct emai
 Runtime validation rejects unsupported auth modes and invalid timeout/port values before the browser starts.
 Rate-limit failures are tracked in `QWEN_ACCOUNT_STATE_FILE`; once the threshold is reached, the circuit breaker pauses account rotation until the cooldown expires.
 Trace fields are injected automatically so JSONL logs, smoke output, consult memory, and autotraining snapshots can be correlated across a single run.
+Consult memory writes now use an atomic temp+rename path so `.coder-sin-qwen-memory.json` is not left half-written on abrupt exits.
 Simple prompts now get normalized into a structured task message instead of being forwarded verbatim.
 Wrapper prefixes like `/ask-qwen` are stripped before Qwen sees the prompt.
 CDP attach now forces `PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR=1` so Playwright can connect without the Browser.setDownloadBehavior error.
-The relay now waits for a stable non-empty assistant answer before it reasserts model settings or finishes the turn, and falls back to stabilized body-text extraction when the usual assistant selectors drift.
-If that still fails, it performs a local screenshot OCR fallback before timing out, so finished responses can still be recovered when Qwen's DOM shifts.
-The browser input boundary now strips `/ask-qwen` and rejects CLI artifacts before typing into Qwen.
+CDP endpoint probes now go through one bounded helper with abort-based timeouts so stale debug ports fail fast instead of hanging the relay.
+The relay now waits for a stable non-empty assistant answer before it reasserts model settings or finishes the turn.
+If completion stability times out or the extracted text looks truncated/broken, the run now fails closed instead of returning partial DOM/OCR fallback output.
+The browser input boundary now strips `/ask-qwen`, rejects CLI artifacts, and truncates oversized prompts with a structured `prompt_truncated` log event before typing into Qwen.
+Conversation-tree branching is fully local and file-backed; branch history is expanded into prompt context before the browser send step, while the browser/session lifecycle itself stays unchanged.
+Tree rendering now marks the active branch path and latest node explicitly, and `--json` responses include the active path plus flattened role history for the stored conversation branch.
+`--checkout` persists a local active node so future runs can continue from that branch without repeating `--branch`, and `--prepare-commit` stages changes plus prints a diff summary without creating a commit.
 
 ## OpenCode
 

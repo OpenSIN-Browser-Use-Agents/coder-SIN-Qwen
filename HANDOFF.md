@@ -62,12 +62,16 @@
 - When repo URLs are not public, the relay also writes a temporary Markdown task packet under `coder-sin-qwen-tasks/` and can publish it as a short-lived public GitHub Gist for Qwen.
 - Repo-aware consults now persist `context_id`, `message_id`, and the latest compact summary in `.coder-sin-qwen-memory.json` (or `SIN_CODER_QWEN_MEMORY_FILE`), and `SIN_CODER_QWEN_SESSION_ID` now binds that memory to one browser tab/session.
 - The consult memory now follows a canonical `state_snapshot` envelope (`protocolVersion`, `metadata`, `mandate`, `stateSnapshot`, `decisionHistory`, `constraints`, `completionCriteria`).
+- Consult memory persistence now writes atomically, so interrupts and parallel exits do not leave `.coder-sin-qwen-memory.json` partially written.
 - Repo-aware replies now flow through `validator.js`, which produces a deterministic review object (`pass`, `score`, `violations`, `retry_action`) before stdout/log persistence.
 - Simple prompts are now normalized into a structured task message, and German repo-style prompts like `optimiere das projekt` should trigger repo context instead of raw passthrough.
 - Wrapper prefixes like `/ask-qwen` are stripped before the prompt is sent to Qwen.
 - CDP attach now sets `PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR=1` so the browser can connect cleanly.
-- The relay now waits for a stable non-empty assistant answer before reasserting model settings or ending the turn, falls back to stabilized body-text extraction when assistant selectors drift, and can use local screenshot OCR when the DOM still fails to settle.
-- The browser input boundary now strips `/ask-qwen` and rejects CLI artifacts before typing into Qwen.
+- The relay now waits for a stable non-empty assistant answer before reasserting model settings or ending the turn, and it fails closed when completion never stabilizes or the extracted reply looks truncated/broken instead of returning partial fallback text.
+- The browser input boundary now strips `/ask-qwen`, rejects CLI artifacts, and truncates oversized prompts before typing into Qwen; JSONL logs record `prompt_truncated` when this happens.
+- A local conversation-tree store now supports branch-based follow-up runs via `--branch <nodeId>` and prints via `--tree`; branch ancestry is expanded into the final prompt before the browser send step.
+- Tree printing now marks the active path and latest node explicitly, and JSON output includes branch path/history metadata so downstream tooling can continue from the correct node without reparsing the tree file.
+- `--checkout` now persists a local active conversation node for future runs, and `--prepare-commit` stages the repo plus prints a commit-ready diff summary without creating a commit.
 - Runtime validation rejects unsupported auth modes and invalid session/port/rate-limit settings before browser work begins.
 - Auth fallback and model-pinning failures now emit structured JSONL events before throwing so selector drift is easier to audit.
 - Trace context is auto-generated once per run and written into logs, smoke output, consult memory, autotraining snapshots, and the session-binding marker used to isolate parallel agents.
@@ -79,6 +83,7 @@
 - The repo-local OpenCode config now defines the canonical `/ask-qwen` command and the `coder-SIN-Qwen` agent directly in `.opencode/opencode.json` so the shell wrapper is no longer required.
 - The global OpenCode config now uses a portable launcher plus `--project-root "$PWD"`, so external repos do not accidentally send coder-SIN-Qwen's own repo context to Qwen.
 - The shared global launcher now auto-detects a reachable local CDP endpoint before attempting browser launch, preventing the profile-lock failure seen when Chrome is already running.
+- CDP reachability now goes through one bounded probe helper so stale ports fail fast across both attach-mode checks and sidecar recovery.
 - The only allowed attach order is the prepared sidecar CDP endpoint on `9444` (or the configured sidecar port).
 - The sidecar recovery launch now uses the Chrome binary directly, seeds the cloned profile's startup URLs, suppresses crash-restore behavior, and opens the configured Qwen URL directly so fallback windows land in chat immediately.
 - The Chrome launch args now also suppress the search-engine-choice screen so startup stays deterministic on recent Chrome builds.
