@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Main CLI entrypoint for the standalone Qwen relay agent.
 import { buildContext } from './context.js';
-import { runQwenSession } from './browser.js';
+import { getQwenCompletionMetadata, runQwenSession } from './browser.js';
 import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
 import { prepareChromeConnectionForRun } from './cdp-recovery.js';
 import { parseQwenResponse } from './parser.js';
@@ -15,6 +15,9 @@ import { attachLifecycleHooks, registerLifecycleResource, runLifecycleCleanup } 
 import { getScopedEnv, validateRuntimeConfig } from './runtime-config.js';
 import { installTraceContext } from './trace.js';
 import { prepareTemporaryPublicTaskFile } from './public-task-file.js';
+import { appendTurn, buildBranchContextPrompt, buildConversationTreePayload, loadTree, printTree, resolveBranchTarget, resolveConversationTreeFile } from './conversation-tree-store.js';
+import { buildTreeLines, checkoutNode } from './lib/conversation-tree-cli.js';
+import { prepareCommit } from './lib/git-prepare.js';
 
 async function main() {
   attachLifecycleHooks();
@@ -34,6 +37,14 @@ async function main() {
   const restoreHash = restoreArgIndex >= 0 && /^[0-9a-f]{7,40}$/iu.test(argv[restoreArgIndex + 1] || '') ? argv[restoreArgIndex + 1] : '';
   const turnArgIndex = argv.indexOf('--turns');
   const maxTurns = turnArgIndex >= 0 ? Number(argv[turnArgIndex + 1] || 1) : 1;
+  const prepareCommitFlag = argv.includes('--prepare-commit');
+  const treeFlag = argv.includes('--tree');
+  const branchArgIndex = argv.indexOf('--branch');
+  const branchId = branchArgIndex >= 0 ? String(argv[branchArgIndex + 1] || '').trim() : '';
+  const checkoutArgIndex = argv.indexOf('--checkout');
+  const checkoutId = checkoutArgIndex >= 0 ? String(argv[checkoutArgIndex + 1] || '').trim() : '';
+  const conversationFileArgIndex = argv.indexOf('--conversation-file');
+  const conversationFile = resolveConversationTreeFile(conversationFileArgIndex >= 0 ? argv[conversationFileArgIndex + 1] : '');
   const input = argv.filter((arg, index) => {
     if (arg === '--turns') return false;
     if (turnArgIndex >= 0 && index === turnArgIndex + 1) return false;
@@ -41,10 +52,16 @@ async function main() {
     if (projectRootArgIndex >= 0 && index === projectRootArgIndex + 1) return false;
     if (arg === '--restore') return false;
     if (restoreArgIndex >= 0 && index === restoreArgIndex + 1) return false;
+    if (arg === '--branch') return false;
+    if (branchArgIndex >= 0 && index === branchArgIndex + 1) return false;
+    if (arg === '--checkout') return false;
+    if (checkoutArgIndex >= 0 && index === checkoutArgIndex + 1) return false;
+    if (arg === '--conversation-file') return false;
+    if (conversationFileArgIndex >= 0 && index === conversationFileArgIndex + 1) return false;
     return !arg.startsWith('--');
   }).join(' ').trim();
-  if (!input && !smokeFlag && !smokeLiveFlag && !preflightFlag && !restoreLastFlag && !restoreHash) {
-    console.error('Usage: ask-qwen [--json] [--snapshot] [--dry-run] [--smoke|--smoke-live] [--preflight] [--restore-last|--restore <hash>] [--project-root <path>] [--turns <n>] <prompt>');
+  if (!input && !smokeFlag && !smokeLiveFlag && !preflightFlag && !restoreLastFlag && !restoreHash && !treeFlag && !prepareCommitFlag && !checkoutId) {
+    console.error('Usage: ask-qwen [--json] [--snapshot] [--dry-run] [--smoke|--smoke-live] [--preflight] [--restore-last|--restore <hash>] [--project-root <path>] [--turns <n>] [--prepare-commit] [--tree] [--branch <nodeId>] [--checkout <nodeId|latest|root|none>] [--conversation-file <path>] <prompt>');
     process.exit(1);
   }
 
@@ -76,10 +93,74 @@ async function main() {
     return;
   }
 
+  if (prepareCommitFlag) {
+    const prepared = await prepareCommit(process.cwd(), dryRunFlag);
+    if (jsonFlag) {
+      console.log(JSON.stringify(prepared, null, 2));
+    } else {
+      console.log(`Staged ${prepared.stagedCount} file(s)${prepared.dryRun ? ' (dry-run)' : ''}`);
+      if (prepared.diffStat) console.log(prepared.diffStat);
+    }
+    return;
+  }
+
+  if (checkoutId) {
+    const updated = await checkoutNode(checkoutId, conversationFile);
+    if (jsonFlag) {
+      console.log(JSON.stringify({
+        ok: true,
+        conversationTree: {
+          file: conversationFile,
+          checkoutTarget: checkoutId,
+          activeId: updated.activeId,
+          ...updated.payload
+        }
+      }, null, 2));
+    } else {
+      console.log(`Switched active conversation to: ${updated.activeId || 'none'}`);
+      console.log(buildTreeLines(updated.tree, { activeNodeId: updated.activeId || '', color: process.stdout.isTTY }));
+    }
+    return;
+  }
+
+  if (treeFlag) {
+    const tree = await loadTree(conversationFile);
+    if (jsonFlag) {
+      const activeNodeId = branchId || tree?.activeId || tree?.latestNodeId || tree?.rootId || '';
+      console.log(JSON.stringify({ ok: true, conversationTree: tree ? buildConversationTreePayload(tree, activeNodeId) : null }, null, 2));
+    } else {
+      console.log(buildTreeLines(tree, { activeNodeId: branchId || '', color: process.stdout.isTTY }));
+    }
+    return;
+  }
+
+  const tree = await loadTree(conversationFile);
+  const resolvedBranchId = branchId || tree?.activeId || '';
+  const branchContext = resolvedBranchId ? await resolveBranchTarget(resolvedBranchId, conversationFile) : null;
+
   const baseContext = await buildContext({ prompt: input, projectRoot });
-  const promptForQwen = typeof baseContext === 'string' ? baseContext : baseContext.prompt;
+  const promptForQwen = buildBranchContextPrompt(
+    typeof baseContext === 'string' ? baseContext : baseContext.prompt,
+    branchContext
+  );
   const hydrated = await hydrateConsultContext(baseContext, promptForQwen);
-  let context = hydrated.context;
+  let context = typeof hydrated.context === 'string'
+    ? hydrated.context
+    : {
+        ...hydrated.context,
+        prompt: promptForQwen,
+        conversationTree: branchContext
+          ? {
+              file: conversationFile,
+              branchId: resolvedBranchId,
+              branchDepth: branchContext.path.length,
+              checkedOutNodeId: branchContext.tree.activeId || null,
+              latestNodeId: branchContext.tree.latestNodeId || branchContext.tree.rootId,
+              path: branchContext.details?.path || [],
+              history: branchContext.details?.history || []
+            }
+          : null
+      };
   const consultMeta = hydrated.consultMeta;
   const dryRun = dryRunFlag || runtimeConfig.dryRun;
   const logFile = resolveLogFile();
@@ -112,9 +193,11 @@ async function main() {
     prompt: promptForQwen,
     rawPrompt: input,
     dryRun,
-    snapshotEnabled,
-    maxTurns,
-    outputMode: jsonFlag ? 'json' : 'text',
+      snapshotEnabled,
+      maxTurns,
+      branchId: resolvedBranchId,
+      conversationFile,
+      outputMode: jsonFlag ? 'json' : 'text',
     traceId: traceContext.traceId,
     runId: traceContext.runId,
     contextId: consultMeta?.contextId || '',
@@ -139,9 +222,49 @@ async function main() {
 
   const reply = await runControlledConversation(context, promptForQwen, maxTurns, sessionTimeoutMs);
   const parsed = parseQwenResponse(reply);
-  const review = validateConsultResponse({ reply, parsed, context });
+  const completion = getQwenCompletionMetadata();
+  const review = validateConsultResponse({ reply, parsed, context, completion });
   parsed.review = review;
   await persistConsultMemory({ consultMeta, context, prompt: promptForQwen, reply, parsed, review });
+
+  if (!review.pass) {
+    const failedRules = review.violations
+      .filter((entry) => entry.severity === 'fail')
+      .map((entry) => entry.rule)
+      .join(', ');
+    writeLogEntry({
+      event: 'finish-invalid',
+      prompt: promptForQwen,
+      rawPrompt: input,
+      status: parsed.plan,
+      reviewAction: review.retry_action,
+      reviewPass: review.pass,
+      failedRules,
+      outputMode: jsonFlag ? 'json' : 'text',
+      traceId: traceContext.traceId,
+      runId: traceContext.runId,
+      contextId: consultMeta?.contextId || '',
+      messageId: consultMeta?.messageId || '',
+      previousMessageId: consultMeta?.previousMessageId || ''
+    }, logFile).catch(() => {});
+    throw new Error(`Qwen reply failed validation: ${failedRules || 'unknown failure'}`);
+  }
+
+  const conversationTurn = await appendTurn(branchId || null, input, reply, {
+    traceId: traceContext.traceId,
+    sessionId: traceContext.sessionId,
+    contextId: consultMeta?.contextId || '',
+    messageId: consultMeta?.messageId || '',
+    previousMessageId: consultMeta?.previousMessageId || '',
+    reviewAction: review.retry_action,
+    reviewPass: review.pass
+  }, conversationFile, { setActiveNode: Boolean(!branchId && tree?.activeId) });
+  parsed.conversationTree = {
+    file: conversationFile,
+    branchId: resolvedBranchId || null,
+    nodeId: conversationTurn.nodeId || '',
+    ...buildConversationTreePayload(conversationTurn.tree, conversationTurn.nodeId)
+  };
 
   if (jsonFlag) {
     await writeStdout(`${JSON.stringify(parsed, null, 2)}\n`);
@@ -160,12 +283,15 @@ async function main() {
     reviewPass: review.pass,
     outputMode: jsonFlag ? 'json' : 'text',
     traceId: traceContext.traceId,
-    runId: traceContext.runId,
-    contextId: consultMeta?.contextId || '',
-    messageId: consultMeta?.messageId || '',
-    previousMessageId: consultMeta?.previousMessageId || ''
-  }, logFile).catch(() => {});
-}
+      runId: traceContext.runId,
+      contextId: consultMeta?.contextId || '',
+      messageId: consultMeta?.messageId || '',
+      previousMessageId: consultMeta?.previousMessageId || '',
+      branchId: resolvedBranchId,
+      conversationFile,
+      conversationNodeId: parsed.conversationTree?.nodeId || ''
+    }, logFile).catch(() => {});
+  }
 
 main().then(async () => {
   await runLifecycleCleanup('shutdown').catch(() => {});
@@ -201,7 +327,7 @@ function writeStdout(text) {
 async function runControlledConversation(initialContext, originalPrompt, maxTurns, sessionTimeoutMs) {
   // Keep same-chat follow-ups inside one browser session when explicit extra turns are requested.
   return withTimeout(
-    runQwenSession(initialContext, { maxTurns, originalPrompt }),
+    runQwenSession(initialContext, { maxTurns, originalPrompt, sessionTimeoutMs }),
     sessionTimeoutMs,
     `Qwen session timed out after ${sessionTimeoutMs}ms`
   );
