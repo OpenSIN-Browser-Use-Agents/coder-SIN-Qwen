@@ -30,9 +30,22 @@ export async function saveTree(tree, filePath = TREE_FILE) {
 export async function appendTurn(parentId, prompt, response, metadata = {}, filePath = TREE_FILE, options = {}) {
   let tree = await loadTree(filePath);
   let nodeId = '';
+  const sessionId = metadata?.sessionId || '';
+  const isExplicitBranch = Boolean(parentId && String(parentId).trim());  
   if (!tree) {
     tree = createTree(prompt, response, metadata);
     nodeId = tree.rootId;
+  } else if (isExplicitBranch) {
+    const targetParent = String(parentId).trim();
+    nodeId = addNode(tree, targetParent, prompt, response, metadata);
+  } else if (sessionId) {
+    const sessionNodes = Object.values(tree.nodes).filter(n => n.sessionId === sessionId);
+    const latestSessionNode = sessionNodes.sort((a, b) => b.timestamp - a.timestamp)[0];
+    if (latestSessionNode) {
+      nodeId = addNode(tree, latestSessionNode.id, prompt, response, metadata);
+    } else {
+      nodeId = addNode(tree, tree.rootId, prompt, response, metadata);
+    }
   } else {
     const targetParent = String(parentId || tree.rootId).trim();
     nodeId = addNode(tree, targetParent, prompt, response, metadata);

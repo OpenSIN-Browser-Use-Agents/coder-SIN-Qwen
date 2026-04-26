@@ -250,7 +250,7 @@ async function main() {
     throw new Error(`Qwen reply failed validation: ${failedRules || 'unknown failure'}`);
   }
 
-  const conversationTurn = await appendTurn(branchId || null, input, reply, {
+  const conversationTurn = await appendTurn(resolvedBranchId || null, input, reply, {
     traceId: traceContext.traceId,
     sessionId: traceContext.sessionId,
     contextId: consultMeta?.contextId || '',
@@ -258,7 +258,7 @@ async function main() {
     previousMessageId: consultMeta?.previousMessageId || '',
     reviewAction: review.retry_action,
     reviewPass: review.pass
-  }, conversationFile, { setActiveNode: Boolean(!branchId && tree?.activeId) });
+  }, conversationFile, { setActiveNode: Boolean(tree) });
   parsed.conversationTree = {
     file: conversationFile,
     branchId: resolvedBranchId || null,
