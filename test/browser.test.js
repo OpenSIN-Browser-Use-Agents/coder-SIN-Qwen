@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildConversationFollowUpPrompt, buildPromptPayload, createBrowserSessionCloser, ensureChromiumCdpCompatibility, getQwenSessionMarker, hasBlockingAuthOverlay, isQwenSessionBinding, looksLikeQwenRateLimit, resolveChromeConnectionConfig, resolveChromeLaunchConfig, resolveChromeProfileCheck, resolvePromptUrlBudget, resolveQwenSessionId, sanitizePromptForBrowser, shouldContinueConversation, shouldRequireChromeProfilePath, summarizeSelectorReport, withRetry } from '../browser.js';
+import { buildConversationFollowUpPrompt, buildPromptPayload, buildSafeCdpConnectParams, buildSafePersistentContextOptions, createBrowserSessionCloser, ensureChromiumCdpCompatibility, getQwenSessionMarker, hasBlockingAuthOverlay, isQwenSessionBinding, isUsefulAssistantCompletionText, looksLikeQwenRateLimit, resolveChromeConnectionConfig, resolveChromeLaunchConfig, resolveChromeProfileCheck, resolveCompletionTimeoutMs, resolvePromptUrlBudget, resolveQwenSessionId, sanitizePromptForBrowser, shouldContinueConversation, shouldRequireChromeProfilePath, summarizeSelectorReport, withRetry } from '../browser.js';
 
 function createLocatorStub(visibleMap, selector) {
   return {
@@ -205,6 +205,33 @@ test('enables Chromium CDP compatibility for attach mode', () => {
     if (previous === undefined) delete process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR;
     else process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR = previous;
   }
+});
+
+test('builds safe CDP connect params for user-owned browsers', () => {
+  assert.deepEqual(buildSafeCdpConnectParams({ timeout: 5000 }), {
+    timeout: 5000,
+    isLocal: true,
+    acceptDownloads: 'internal-browser-default'
+  });
+});
+
+test('forces internal browser download handling defaults for CDP attach', () => {
+  assert.deepEqual(buildSafePersistentContextOptions({ noDefaultViewport: true }), {
+    noDefaultViewport: true,
+    acceptDownloads: 'internal-browser-default'
+  });
+});
+
+test('derives completion timeout from overall session timeout', () => {
+  assert.equal(resolveCompletionTimeoutMs(undefined), 120000);
+  assert.equal(resolveCompletionTimeoutMs(180000), 170000);
+  assert.equal(resolveCompletionTimeoutMs(600000), 590000);
+});
+
+test('detects when an extracted assistant reply is usefully new', () => {
+  assert.equal(isUsefulAssistantCompletionText('', 'branch json smoke ok.'), true);
+  assert.equal(isUsefulAssistantCompletionText('same', 'same'), false);
+  assert.equal(isUsefulAssistantCompletionText('same', '   '), false);
 });
 
 test('sanitizes ask-qwen wrapper and rejects CLI artifacts', () => {
