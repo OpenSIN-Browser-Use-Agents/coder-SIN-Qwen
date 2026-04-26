@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { atomicWriteJson } from './lib/memory-writer.js';
 import { APP_NAME, getScopedEnv } from './runtime-config.js';
 import { installTraceContext, readTraceContext } from './trace.js';
 
@@ -101,7 +102,7 @@ export async function persistConsultMemory({ consultMeta, context, prompt, reply
     }
   };
 
-  await fs.writeFile(consultMeta.memoryFile, `${JSON.stringify(nextMemory, null, 2)}\n`, 'utf8');
+  await atomicWriteJson(consultMeta.memoryFile, nextMemory);
 }
 
 export function resolveMemoryFile() {
