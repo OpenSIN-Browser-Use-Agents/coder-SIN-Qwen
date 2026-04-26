@@ -54,13 +54,30 @@ function buildRepoAwarePrompt(context) {
     return line;
   };
 
-  const repoUrlLine = repoVisibility === 'public'
-    ? includeUrlLine(`- repo url: ${context.repo?.urls?.web || 'N/A'}`, context.repo?.urls?.web)
-    : `- repo url: private_repo_unavailable`;
+  const publicTaskFileUrlLine = publicTaskFile?.url
+    ? includeUrlLine(`- url: ${publicTaskFile.url}`, publicTaskFile.url)
+    : null;
 
-  const commitUrlLine = repoVisibility === 'public'
-    ? includeUrlLine(`- commit url: ${context.repo?.urls?.commit || 'N/A'}`, context.repo?.urls?.commit)
-    : `- commit ref: ${context.repo?.head || 'N/A'} (local only)`;
+  let repoUrlLine;
+  let commitUrlLine;
+
+  if (publicTaskFileUrlLine) {
+    commitUrlLine = repoVisibility === 'public'
+      ? includeUrlLine(`- commit url: ${context.repo?.urls?.commit || 'N/A'}`, context.repo?.urls?.commit)
+      : `- commit ref: ${context.repo?.head || 'N/A'} (local only)`;
+
+    repoUrlLine = repoVisibility === 'public'
+      ? includeUrlLine(`- repo url: ${context.repo?.urls?.web || 'N/A'}`, context.repo?.urls?.web)
+      : `- repo url: private_repo_unavailable`;
+  } else {
+    repoUrlLine = repoVisibility === 'public'
+      ? includeUrlLine(`- repo url: ${context.repo?.urls?.web || 'N/A'}`, context.repo?.urls?.web)
+      : `- repo url: private_repo_unavailable`;
+
+    commitUrlLine = repoVisibility === 'public'
+      ? includeUrlLine(`- commit url: ${context.repo?.urls?.commit || 'N/A'}`, context.repo?.urls?.commit)
+      : `- commit ref: ${context.repo?.head || 'N/A'} (local only)`;
+  }
 
   return renderPromptSections([
     section('MANDATE', [`Task:\n${context.prompt || ''}`], 100),
@@ -74,9 +91,9 @@ function buildRepoAwarePrompt(context) {
       repoUrlLine,
       commitUrlLine
     ].filter(Boolean), 80),
-    section('PUBLIC TASK FILE', publicTaskFile?.url
+    section('PUBLIC TASK FILE', publicTaskFileUrlLine
       ? [
-          includeUrlLine(`- url: ${publicTaskFile.url}`, publicTaskFile.url),
+          publicTaskFileUrlLine,
           publicTaskFile.localPath ? `- local path: ${publicTaskFile.localPath}` : '',
           publicTaskFile.purpose ? `- purpose: ${publicTaskFile.purpose}` : ''
         ].filter(Boolean)

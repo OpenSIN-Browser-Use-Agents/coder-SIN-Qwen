@@ -12,10 +12,9 @@ const DEFAULT_MAX_EXCERPT_BYTES = 16_000;
 const GIST_API_URL = 'https://api.github.com/gists';
 
 export function shouldPublishTemporaryPublicTaskFile(context, mode = resolvePublicTaskFileMode(process.env)) {
-  if (!context?.repo) return false;
   if (mode === 'off') return false;
   if (mode === 'always') return true;
-  return String(context?.urlAccessibility || '').trim().toLowerCase() !== 'public';
+  return String(context?.urlAccessibility || '').trim().toLowerCase() === 'local_only';
 }
 
 export async function prepareTemporaryPublicTaskFile({
