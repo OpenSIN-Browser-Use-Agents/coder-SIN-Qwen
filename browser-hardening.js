@@ -23,8 +23,17 @@ export function resolveHardeningFlags(env = process.env) {
   return {
     safeInput: parseBoolean(env.SIN_CODER_QWEN_SAFE_INPUT, true),
     safeInputDelayMs: parseNumber(env.SIN_CODER_QWEN_SAFE_INPUT_DELAY_MS, 28),
-    maxSequentialMs: parseNumber(env.SIN_CODER_QWEN_SAFE_INPUT_MAX_SEQUENTIAL_MS, 12_000)
+    maxSequentialMs: parseNumber(env.SIN_CODER_QWEN_SAFE_INPUT_MAX_SEQUENTIAL_MS, 30_000)
   };
+}
+
+async function triggerReactCompatibleEvents(input, page) {
+  try {
+    await input.evaluate((node) => {
+      node.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: node.value }));
+      node.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    });
+  } catch {}
 }
 
 export async function safeInjectInput(page, input, prompt, options = {}) {
@@ -55,6 +64,7 @@ export async function safeInjectInput(page, input, prompt, options = {}) {
       await input.focus().catch(() => {});
     }
     await page.keyboard.insertText(text);
+    await triggerReactCompatibleEvents(input, page);
     return true;
   }
 

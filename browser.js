@@ -68,7 +68,7 @@ const QWEN_SESSION_STORAGE_KEY = 'coder_sin_qwen_session_id';
 const QWEN_SESSION_NAME_PREFIX = 'coder-sin-qwen-session:';
 // Centralized selector map so UI changes stay localized.
 export const SELECTORS = {
-  newChat: ['.sidebar-entry-fixed-list-content', '.sidebar-entry-fixed-list-text', 'button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', 'text=Neue Unterhaltung', '[data-testid="new-chat"]'],
+  newChat: ['div.sidebar-entry-fixed-list-content', '.sidebar-entry-fixed-list-text', 'button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', 'text=Neue Unterhaltung', '[data-testid="new-chat"]', 'div.sidebar-side-fold-container-open'],
   authEntry: ['.auth-button-ui.login', 'div:has-text("Anmelden")', 'button:has-text("Anmelden")', 'button:has-text("Loslegen")', 'button:has-text("Get started")'],
   authOverlay: ['[role="dialog"]', 'text=Angemeldet bleiben', 'text=Stay signed in', 'text=Willkommen', 'text=Welcome', 'button:has-text("Registrieren")', 'button:has-text("Register")'],
   authWelcomeDialog: ['[role="dialog"]'],
@@ -80,8 +80,8 @@ export const SELECTORS = {
   thinkingMenu: ['.qwen-thinking-selector .ant-select-selector', '.qwen-thinking-selector [role="combobox"]', '.qwen-select-thinking-label', '.qwen-select-thinking-label-text'],
   thinkingOption: ['.ant-select-item-option[title="Denken"]', '[role="option"][aria-label="Denken"]', '.ant-select-item-option[title="Thinking"]', '[role="option"][aria-label="Thinking"]'],
   promptInput: ['textarea.message-input-textarea', 'textarea:not(.ime-text-area):not([readonly])', '[contenteditable="true"]', 'input[type="text"]', 'textarea[aria-label*="message" i]', 'input[aria-label*="prompt" i]'],
-  sendButton: ['.send-button', 'button[type="submit"]', 'button[aria-label*="send" i]', 'button:has-text("Send")', 'button:has-text("Senden")'],
-  assistantOutput: ['.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.message-content', '.chat-message .content']
+  sendButton: ['div.chat-prompt-send-button button', '.send-button', 'button[type="submit"]', 'button[aria-label*="send" i]', 'button:has-text("Send")', 'button:has-text("Senden")'],
+  assistantOutput: ['.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.message-content', '.chat-message .content', '.chat-container-statement .markdown-prose', '.markdown-prose']
 };
 
 export async function runQwenSession(input, options = {}) {
@@ -1098,6 +1098,27 @@ async function findPromptInput(page) {
   return null;
 }
 
+async function verifyReactInputRegistration(input, expectedText) {
+  try {
+    const registered = await input.evaluate((node, expected) => {
+      const currentValue = String(node.value || node.innerText || node.textContent || '').trim();
+      if (currentValue === expected) return true;
+      const fiberKey = Object.keys(node).find((key) => key.startsWith('__reactFiber') || key.startsWith('__reactInternalInstance'));
+      if (!fiberKey) return currentValue === expected;
+      let fiber = node[fiberKey];
+      for (let i = 0; i < 8 && fiber; i++) {
+        const state = fiber.memoizedState;
+        if (state?.memoizedState === expected || state?.queue?.lastRenderedState === expected) return true;
+        fiber = fiber.return;
+      }
+      return currentValue === expected;
+    }, expectedText.trim());
+    return Boolean(registered);
+  } catch {
+    return false;
+  }
+}
+
 async function enterPrompt(page, input, prompt) {
   const browserSafePrompt = sanitizePromptForBrowser(prompt);
   const guardedPrompt = guardPromptLength(browserSafePrompt, { env: process.env });
@@ -1111,7 +1132,10 @@ async function enterPrompt(page, input, prompt) {
   }
 
   const safePrompt = guardedPrompt.prompt;
-  if (await safeInjectInput(page, input, safePrompt, { env: process.env })) return;
+  if (await safeInjectInput(page, input, safePrompt, { env: process.env })) {
+    const reactRegistered = await verifyReactInputRegistration(input, safePrompt);
+    if (reactRegistered) return;
+  }
 
   const isTextField = await input.evaluate((node) => {
     const tag = node.tagName.toLowerCase();
@@ -1151,9 +1175,18 @@ async function submitPrompt(page, input, prompt, previousAssistantState = { coun
   }
 
   await page.waitForFunction((selectors) => selectors.some((selector) => Boolean(document.querySelector(selector))), SELECTORS.sendButton, { timeout: 5_000 }).catch(() => {});
-  const sendButtons = page.locator('button.send-button');
+  const sendButtonContainer = page.locator('div.chat-prompt-send-button');
+  const sendButtons = sendButtonContainer.locator('button');
   if (await sendButtons.count().catch(() => 0)) {
     await sendButtons.first().click({ force: true }).catch(() => {});
+    if (await waitForSubmissionKickoff(page, input, prompt, previousAssistantState)) return;
+  }
+
+  if (isTextField) {
+    await input.focus().catch(() => {});
+    await input.fill(prompt).catch(() => {});
+    await page.waitForTimeout(200);
+    await input.press('Enter').catch(() => {});
     await waitForSubmissionKickoff(page, input, prompt, previousAssistantState);
   }
 }

@@ -6,7 +6,7 @@ test('resolves hardening flags with safe input enabled by default', () => {
   const flags = resolveHardeningFlags({});
   assert.equal(flags.safeInput, true);
   assert.equal(flags.safeInputDelayMs, 28);
-  assert.equal(flags.maxSequentialMs, 12000);
+  assert.equal(flags.maxSequentialMs, 30_000);
 });
 
 test('resolves hardening flags from environment', () => {
@@ -17,7 +17,7 @@ test('resolves hardening flags from environment', () => {
 
   assert.equal(flags.safeInput, false);
   assert.equal(flags.safeInputDelayMs, 12);
-  assert.equal(flags.maxSequentialMs, 12000);
+  assert.equal(flags.maxSequentialMs, 30_000);
 });
 
 test('uses pressSequentially when available', async () => {
