@@ -14,10 +14,9 @@
 - **`SELECTORS.newChat` updated** — added `div.sidebar-side-fold-container-open` for opening a collapsed sidebar before clicking the new-chat button.
 - **`submitPrompt()` send button locator** — changed from hardcoded `page.locator('button.send-button')` to `page.locator('div.chat-prompt-send-button').locator('button')`, matching the actual Qwen Studio DOM structure.
 
-- **Conversation tree branch spawning** — same-session turns now append to the same branch instead of creating new children of root. `appendTurn()` in `conversation-tree-store.js` checks `sessionId` from metadata and finds the latest node with that session as the parent. This prevents "branch wastelands" where every relay call spawned a new root child. (Issue #17)
-- **`index.js` branch resolution** — `appendTurn()` now receives `resolvedBranchId` (which includes `tree.activeId`) instead of raw `branchId`, so the already-resolved active branch is used as the parent when no explicit `--branch` flag is provided.
-- **`setActiveNode` condition** — changed from `Boolean(!branchId && tree?.activeId)` to `Boolean(tree)` so new nodes always become active when a tree exists, not only when `branchId` is falsy.
-- **PCPM project ID** — renamed from `omo-SIN-Qwen` to `coder-SIN-Qwen` across hooks, config, and AGENTS.md.
+### Added
+
+- **Circuit breaker for GitHub API calls** — added `circuit-breaker.js` with exponential backoff and jitter to prevent cascading failures when publishing temporary public task files to GitHub Gists. Integrated into `public-task-file.js` for both gist creation and deletion operations.
 
 ### Removed
 
