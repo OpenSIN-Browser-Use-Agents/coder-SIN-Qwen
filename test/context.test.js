@@ -150,3 +150,112 @@ test('verifies urls before including them in the prompt context', async () => {
     global.fetch = originalFetch;
   }
 });
+
+test('attaches up to limit real attachments per message, preferring PDFs/text/logs over images', async () => {
+   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'coder-sin-qwen-attachment-limit-'));
+
+   // Create more than 10 files of various types
+   const filesToCreate = [
+     'doc1.pdf',
+     'doc2.pdf',
+     'log1.log',
+     'log2.log',
+     'txt1.txt',
+     'txt2.txt',
+     'trace1.trace',
+     'trace2.trace',
+     'image1.png',
+     'image2.jpg',
+     'image3.webp',
+     'code1.js',
+     'code2.ts',
+     'style.css',
+     'html1.html',
+   ];
+
+   for (const file of filesToCreate) {
+     await fs.writeFile(path.join(tempDir, file), 'content', 'utf8');
+   }
+
+   const context = await buildContext({ 
+     prompt: 'Attach all relevant files for review', 
+     projectRoot: tempDir 
+   });
+
+   // Ensure no image files are attached
+   const imageAttachments = context.attachmentCandidates.filter(att => 
+     /\.(?:png|jpg|jpeg|webp|gif|bmp|tiff)$/u.test(att.path)
+   );
+   assert.equal(imageAttachments.length, 0, 'No image files should be attached');
+
+   // Ensure we don't exceed the default limit of 10
+   assert.ok(context.attachmentCandidates.length <= 10, 'Attachment count should not exceed limit');
+
+   // Ensure we have attached some of the preferred types (PDFs, logs, txt, traces)
+   const preferredAttachments = context.attachmentCandidates.filter(att => 
+     /\.(?:pdf|log|txt|trace)$/u.test(att.path)
+   );
+   assert.ok(preferredAttachments.length > 0, 'Should attach at least one preferred file type');
+
+   // Clean up
+   await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test('respects explicit limit parameter', async () => {
+   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'coder-sin-qwen-explicit-limit-'));
+
+   // Create 15 files
+   const files = Array.from({ length: 15 }, (_, i) => `file${i}.txt`);
+   for (const file of files) {
+     await fs.writeFile(path.join(tempDir, file), 'content', 'utf8');
+   }
+
+   // Test with limit = 5
+   const attachments = await buildAttachmentCandidates({
+     cwd: tempDir,
+     files: files,
+     prompt: 'Attach some files',
+     repoVisibility: 'public',
+     limit: 5
+   });
+
+   assert.equal(attachments.length, 5, 'Should respect explicit limit');
+
+   // Clean up
+   await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+test('prioritizes evidence files when forceEvidenceAttachments is true', async () => {
+   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'coder-sin-qwen-evidence-priority-'));
+
+   // Create many log/txt files and a few others
+   const logFiles = Array.from({ length: 8 }, (_, i) => `log${i}.log`);
+   const txtFiles = Array.from({ length: 4 }, (_, i) => `note${i}.txt`);
+   const otherFiles = ['image1.png', 'code1.js', 'doc1.pdf'];
+
+   for (const file of [...logFiles, ...txtFiles, ...otherFiles]) {
+     await fs.writeFile(path.join(tempDir, file), 'content', 'utf8');
+   }
+
+   const prompt = 'Show me all screenshots and logs for this issue'; // triggers forceEvidenceAttachments
+   const context = await buildContext({ 
+     prompt, 
+     projectRoot: tempDir 
+   });
+
+   // Should have attached up to 4 log/txt files first (due to mustInclude logic)
+   const logTxtAttachments = context.attachmentCandidates.filter(att => 
+     /\.(?:log|txt)$/u.test(att.path)
+   );
+   // With limit=10 and 8 log + 4 txt = 12 total log/txt, we should get at least 4 (the mustInclude)
+   assert.ok(logTxtAttachments.length >= 4, 'Should prioritize log/txt files when evidence is requested');
+
+   // Ensure no images
+   const imageAttachments = context.attachmentCandidates.filter(att => 
+     /\.(?:png|jpg|jpeg|webp|gif|bmp|tiff)$/u.test(att.path)
+   );
+   assert.equal(imageAttachments.length, 0, 'No image files should be attached');
+
+   // Clean up
+   await fs.rm(tempDir, { recursive: true, force: true });
+});

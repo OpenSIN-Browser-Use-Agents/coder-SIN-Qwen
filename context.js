@@ -336,43 +336,43 @@ async function verifyRepoUrls(repoUrls, repoVisibility) {
 }
 
 export async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, limit = 10 }) {
-  const forceEvidenceAttachments = /(screenshot|screenshots|image|images|bild|bilder|log|logs|trace|traces|upload|uploads|datei|dateien|attach|attachment|anhang|anhänge)/iu.test(String(prompt || ''));
-
-  const ranked = rankAttachmentCandidates(files.filter((file) => !isImageFile(file)), prompt, forceEvidenceAttachments);
-  const mustInclude = forceEvidenceAttachments
-    ? ranked.filter((file) => /\.(?:log|txt|trace|pdf)$/u.test(file)).slice(0, Math.min(4, limit))
-    : [];
-  const rankedSet = new Set(mustInclude);
-  const selected = [...mustInclude, ...ranked.filter((file) => !rankedSet.has(file))].slice(0, limit);
-  const attachments = [];
-
-  for (const relativePath of selected) {
-    const absolutePath = path.join(cwd, relativePath);
-    try {
-      const stat = await fs.stat(absolutePath);
-      if (!stat.isFile()) continue;
-      attachments.push({
-        path: relativePath,
-        absolutePath,
-        size: stat.size,
-        reason: repoVisibility === 'public'
-          ? (forceEvidenceAttachments ? 'explicit_evidence_attachment' : 'public_repo_code_attachment')
-          : 'private_repo_context'
-      });
-    } catch {
-      // Ignore unreadable files.
-    }
-  }
-
-  return attachments;
-}
+   const forceEvidenceAttachments = /(screenshot|screenshots|image|images|bild|bilder|log|logs|trace|traces|upload|uploads|datei|dateien|attach|attachment|anhang|anhänge)/iu.test(String(prompt || ''));
+ 
+   const ranked = rankAttachmentCandidates(files.filter((file) => !isImageFile(file)), prompt, forceEvidenceAttachments);
+   const mustInclude = forceEvidenceAttachments
+     ? ranked.filter((file) => /\.(?:log|txt|trace|pdf)$/u.test(file)).slice(0, Math.min(4, limit))
+     : [];
+   const rankedSet = new Set(mustInclude);
+   const selected = [...mustInclude, ...ranked.filter((file) => !rankedSet.has(file))].slice(0, limit);
+   const attachments = [];
+ 
+   for (const relativePath of selected) {
+     const absolutePath = path.join(cwd, relativePath);
+     try {
+       const stat = await fs.stat(absolutePath);
+       if (!stat.isFile()) continue;
+       attachments.push({
+         path: relativePath,
+         absolutePath,
+         size: stat.size,
+         reason: repoVisibility === 'public'
+           ? (forceEvidenceAttachments ? 'explicit_evidence_attachment' : 'public_repo_code_attachment')
+           : 'private_repo_context'
+       });
+     } catch {
+       // Ignore unreadable files.
+     }
+   }
+ 
+   return attachments;
+ }
 
 function rankAttachmentCandidates(files, prompt, forceEvidenceAttachments) {
-  const tokens = tokenizePrompt(prompt);
-  return [...files]
-    .filter((file) => forceEvidenceAttachments || !/\.(?:png|jpg|jpeg|webp|gif|bmp|tiff|txt|log)$/u.test(file))
-    .sort((left, right) => attachmentScore(right, tokens, forceEvidenceAttachments) - attachmentScore(left, tokens, forceEvidenceAttachments) || left.localeCompare(right));
-}
+   const tokens = tokenizePrompt(prompt);
+   return [...files]
+     .filter((file) => !/\.(?:png|jpg|jpeg|webp|gif|bmp|tiff)$/u.test(file))
+     .sort((left, right) => attachmentScore(right, tokens, forceEvidenceAttachments) - attachmentScore(left, tokens, forceEvidenceAttachments) || left.localeCompare(right));
+ }
 
 function rankRelevantFiles(files, prompt) {
   const tokens = tokenizePrompt(prompt);
