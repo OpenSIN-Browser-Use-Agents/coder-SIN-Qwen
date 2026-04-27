@@ -1,0 +1,11 @@
+{
+  "name": "@coder-sin/qwen-connector",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@coder-sin/qwen-core": "workspace:*"
+  },
+  "bin": {
+    "ask-qwen": "./index.js"
+  }
+}
