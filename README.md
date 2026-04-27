@@ -38,6 +38,16 @@ It can also persist a local conversation tree so later runs can branch from any 
 - `coder-sin-qwen-tasks/` — runtime workspace for generated task packets
 - `.nvmrc` / `.npmrc` — runtime guardrails
 
+## Workspace scaffold
+
+The monorepo migration has started with a minimal scaffold:
+
+- `apps/qwen-connector/` — future CLI package wrapper
+- `packages/qwen-core/` — shared helper package scaffold
+- `pnpm-workspace.yaml` and `turbo.json` — workspace and task-graph foundations
+
+The root CLI still remains the source of truth while the migration continues.
+
 ## Usage
 
 ```bash
