@@ -20,5 +20,16 @@
       "description": "Ask the local Qwen relay in conversational text mode",
       "template": "Nutze coder-SIN-Qwen strikt als Qwen-first relay. Sammle zuerst den relevanten Arbeitskontext aus dem aktuellen Projekt: betroffene Dateien, relevante Logs/Screenshots, issue URLs, repo context und wichtige Provider-/Plattform-Doku. Fuer public repos bevorzuge repo/file/issue URLs; fuer private repos oder lokale Evidenz nutze lokale Dateien/Anhänge statt unzugänglicher URLs. Fuehre danach exakt diesen Befehl aus: `node ./index.js --project-root \"$PWD\" --turns 1 \"$ARGUMENTS\"`. Nutze NICHT `npm run cdp:start`, NICHT webauto-nodriver direkt und NICHT den coder-SIN-Qwen Repo-Kontext, wenn eigentlich ein anderes Projekt gemeint ist. Gib danach nur die stdout-Antwort von Qwen knapp wieder."
     }
+  },
+  "plugin": [
+    "opencode-antigravity-auth@1.6.5-beta.0",
+    "opencode-antigravity-image@latest",
+    "opencode-openrouter-auth",
+    "opencode-qwen-auth",
+    "/Users/jeremy/.config/opencode/local-plugins/oh-my-opencode-sin",
+    "/Users/jeremy/.config/opencode/plugins/omoc-swarm.ts"
+  ],
+  "provider": {
+    "openai": {}
   }
 }

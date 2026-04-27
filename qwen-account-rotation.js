@@ -1,8 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { parseIntegerEnv } from './runtime-config.js';
 
 const DEFAULT_STATE_PATH = path.join(process.cwd(), 'artifacts', 'qwen-account-state.json');
 const DEFAULT_COOLDOWN_HOURS = 20;
+const DEFAULT_RATE_LIMIT_FAILURE_THRESHOLD = 2;
+const DEFAULT_RATE_LIMIT_CIRCUIT_BREAKER_MINUTES = 60;
 
 function splitList(value) {
   return String(value || '')
@@ -49,6 +52,14 @@ export function resolveQwenAccountStatePath(env = process.env) {
   return String(env.QWEN_ACCOUNT_STATE_FILE || DEFAULT_STATE_PATH).trim() || DEFAULT_STATE_PATH;
 }
 
+export function resolveQwenRateLimitPolicy(env = process.env) {
+  return {
+    cooldownHours: parseIntegerEnv(env.QWEN_RATE_LIMIT_COOLDOWN_HOURS, DEFAULT_COOLDOWN_HOURS, { min: 1, max: 168, name: 'rate-limit cooldown hours' }),
+    failureThreshold: parseIntegerEnv(env.QWEN_RATE_LIMIT_FAILURE_THRESHOLD, DEFAULT_RATE_LIMIT_FAILURE_THRESHOLD, { min: 1, max: 10, name: 'rate-limit failure threshold' }),
+    circuitBreakerMinutes: parseIntegerEnv(env.QWEN_RATE_LIMIT_CIRCUIT_BREAKER_MINUTES, DEFAULT_RATE_LIMIT_CIRCUIT_BREAKER_MINUTES, { min: 1, max: 1440, name: 'rate-limit circuit breaker minutes' })
+  };
+}
+
 export async function loadQwenAccountState(statePath = resolveQwenAccountStatePath()) {
   try {
     const raw = await fs.readFile(statePath, 'utf8');
@@ -77,8 +88,17 @@ export function normalizeAccountState(input = {}) {
     preferredAccountId: String(input.preferredAccountId || '').trim(),
     lastUsedAccountId: String(input.lastUsedAccountId || '').trim(),
     cooldowns,
+    rateLimitStreak: Number.isFinite(Number(input.rateLimitStreak)) ? Math.max(0, Number(input.rateLimitStreak)) : 0,
+    circuitBreakerUntil: String(input.circuitBreakerUntil || '').trim(),
+    lastRateLimitAt: String(input.lastRateLimitAt || '').trim(),
+    lastSuccessAt: String(input.lastSuccessAt || '').trim(),
     updatedAt: String(input.updatedAt || '')
   };
+}
+
+export function isRateLimitCircuitOpen(state = normalizeAccountState(), now = new Date()) {
+  const until = Date.parse(state.circuitBreakerUntil || '');
+  return Number.isFinite(until) && until > now.getTime();
 }
 
 export function selectNextQwenAccounts(accounts, state = normalizeAccountState(), now = new Date()) {
@@ -86,6 +106,8 @@ export function selectNextQwenAccounts(accounts, state = normalizeAccountState()
   const timestamps = new Map(Object.entries(state.cooldowns || {}));
   const currentMs = now.getTime();
   const order = new Map(active.map((account, index) => [String(account.id), index]));
+
+  if (isRateLimitCircuitOpen(state, now)) return [];
 
   return active.slice().sort((a, b) => {
     const aId = String(a.id);
@@ -118,6 +140,31 @@ export function markAccountCooldown(state = normalizeAccountState(), accountId, 
   next.cooldowns[id] = new Date(cooldownUntil || Date.now()).toISOString();
   next.updatedAt = new Date().toISOString();
   if (next.preferredAccountId === id) next.preferredAccountId = '';
+  return next;
+}
+
+export function markRateLimitFailure(state = normalizeAccountState(), accountId, policy = resolveQwenRateLimitPolicy(), now = new Date()) {
+  const next = markAccountCooldown(state, accountId, defaultCooldownUntil(policy.cooldownHours));
+  const id = String(accountId || '').trim();
+  next.rateLimitStreak = Number(next.rateLimitStreak || 0) + 1;
+  next.lastRateLimitAt = now.toISOString();
+  next.updatedAt = now.toISOString();
+  if (next.rateLimitStreak >= policy.failureThreshold) {
+    next.circuitBreakerUntil = new Date(now.getTime() + policy.circuitBreakerMinutes * 60 * 1000).toISOString();
+    next.rateLimitStreak = 0;
+  }
+  if (id && next.preferredAccountId === id) next.preferredAccountId = '';
+  return normalizeAccountState(next);
+}
+
+export function markRateLimitSuccess(state = normalizeAccountState(), accountId, now = new Date()) {
+  const next = normalizeAccountState(state);
+  const id = String(accountId || '').trim();
+  next.rateLimitStreak = 0;
+  next.circuitBreakerUntil = '';
+  next.lastSuccessAt = now.toISOString();
+  next.updatedAt = now.toISOString();
+  if (id) next.lastUsedAccountId = id;
   return next;
 }
 

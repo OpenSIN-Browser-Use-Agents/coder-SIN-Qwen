@@ -6,6 +6,7 @@ import { detectChromeProfileLock, resolveChromeConnectionConfig, runBrowserE2ECh
 import { prepareChromeConnectionForRun } from './cdp-recovery.js';
 import { writeLogEntry } from './logger.js';
 import { getScopedEnv } from './runtime-config.js';
+import { readTraceContext } from './trace.js';
 
 export async function runSmokeCheck({ live = getScopedEnv('SMOKE_LIVE', '0') === '1' } = {}) {
   // Start with cheap checks, then optionally escalate to a live browser proof.
@@ -21,7 +22,8 @@ export async function runSmokeCheck({ live = getScopedEnv('SMOKE_LIVE', '0') ===
     cdpUrl: launchConfig.cdpUrl || '',
     lockState,
     playwright: false,
-    notes: []
+    notes: [],
+    trace: readTraceContext()
   };
 
   if (!fs.existsSync(profilePath)) {

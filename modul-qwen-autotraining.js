@@ -7,6 +7,7 @@ import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js
 import { parseQwenResponse } from './parser.js';
 import { validateConsultResponse } from './validator.js';
 import { getScopedEnv } from './runtime-config.js';
+import { readTraceContext } from './trace.js';
 
 const DEFAULT_AUTOTRAINING_FILE = '.coder-sin-qwen-autotraining.jsonl';
 
@@ -58,6 +59,7 @@ export function buildAutotrainingSnapshot({ context, consultMeta, prompt, reply,
       retry_action: review?.retry_action || 'accept',
       violations: review?.violations || []
     },
+    trace: readTraceContext(),
     metrics: {
       latency_ms: 0,
       score: Number(review?.score || 0)
@@ -97,6 +99,8 @@ export function buildAutotrainingSuggestions({ snapshot, parsed, review, now = n
       : review?.retry_action === 'strip_fluff'
         ? 'fluff_reduction'
         : 'accept'
+    ,
+    trace: readTraceContext()
   }];
 }
 

@@ -5,7 +5,7 @@
 
 BRAIN_CLI="/Users/jeremy/dev/global-brain/src/cli.js"
 BRAIN_ROOT="/Users/jeremy/dev/global-brain"
-PROJECT_ID="omo-SIN-Qwen"
+PROJECT_ID="coder-SIN-Qwen"
 GOAL_ID="default-goal"
 GOAL_DESC="Continue development"
 

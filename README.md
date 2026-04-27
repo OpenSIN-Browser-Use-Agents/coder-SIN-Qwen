@@ -11,6 +11,7 @@ It does not “think” for you. It:
 
 If you explicitly need machine-readable output, use `--json` so the repo prints the parsed payload instead.
 For richer Qwen back-and-forth, the relay can take one short follow-up turn when the answer clearly suggests a useful next step.
+It can also persist a local conversation tree so later runs can branch from any earlier node instead of only continuing linearly.
 
 ## Files
 
@@ -28,11 +29,13 @@ For richer Qwen back-and-forth, the relay can take one short follow-up turn when
 - `logger.js` — JSONL run logging
 - `smoke.js` — readiness check
 - `restore.js` — rollback helper
+- `public-task-file.js` — temporary task packet writer and optional public gist publisher
 - `scripts/merge-main.sh` — guarded GitHub merge helper
 - `ignore-filter.js` — `.qwenignore` / `.gitignore` filtering
 - `INDEX.md` — repo map
 - `INSTALL.md` — setup guide
 - `OPS.md` — operations and rollback notes
+- `coder-sin-qwen-tasks/` — runtime workspace for generated task packets
 - `.nvmrc` / `.npmrc` — runtime guardrails
 
 ## Usage
@@ -57,6 +60,39 @@ Optional snapshot before run:
 
 ```bash
 node ./index.js --snapshot "Review the repo and propose the next implementation step"
+```
+
+Conversation tree branch from a previous node:
+
+```bash
+node ./index.js --branch <node-id> "Refine this branch"
+```
+
+Print the current conversation tree:
+
+```bash
+node ./index.js --tree
+```
+
+Highlight one existing branch while printing the tree:
+
+```bash
+node ./index.js --tree --branch <node-id>
+```
+
+Persistently switch the local active branch:
+
+```bash
+node ./index.js --checkout <node-id>
+node ./index.js --checkout latest
+node ./index.js --checkout none
+```
+
+Prepare a commit without creating one:
+
+```bash
+node ./index.js --prepare-commit
+node ./index.js --prepare-commit --dry-run
 ```
 
 Dry run:
@@ -167,6 +203,7 @@ export CHROME_REMOTE_DEBUGGING_PORT="9444"
 ```
 
 Attach mode keeps the browser alive and does not auto-close the attached tab afterward.
+When attach mode is active, the relay probes `/json/version` before skipping the cloned sidecar profile check, logs `attach_mode_skip_sidecar_profile_check`, and fails fast if the endpoint is stale.
 
 If the recovered session lands on the Qwen auth page, the relay uses direct email/password login with Infisical-backed Qwen accounts only.
 
@@ -178,8 +215,12 @@ If the recovered session lands on the Qwen auth page, the relay uses direct emai
 
 ## Environment
 
+- `QWEN_AUTH_METHOD` — locked to `email_password` by runtime validation
+- `SIN_CODER_QWEN_SESSION_TIMEOUT_MS` — hard timeout for one Qwen browser session
+- `QWEN_RATE_LIMIT_COOLDOWN_HOURS` — cooldown window after a rate-limit hit
+- `QWEN_RATE_LIMIT_FAILURE_THRESHOLD` — number of consecutive rate-limit hits before the circuit breaker opens
+- `QWEN_RATE_LIMIT_CIRCUIT_BREAKER_MINUTES` — how long the circuit breaker stays open
 - `QWEN_URL` — defaults to `https://chat.qwen.ai`
-- `QWEN_AUTH_METHOD` — defaults to `email_password` when Qwen account credentials are configured
 - `QWEN_ACCOUNT_ORDER` — preferred account order for fallback login (for example `2,3,1`)
 - `QWEN_ACCOUNT_STATE_FILE` — non-secret cooldown state file for account rotation (defaults to `artifacts/qwen-account-state.json`)
 - `QWEN_ACCOUNT_1_EMAIL` / `QWEN_ACCOUNT_1_PASSWORD` — direct login credentials for account 1
@@ -194,7 +235,11 @@ If the recovered session lands on the Qwen auth page, the relay uses direct emai
 - `SIN_CODER_QWEN_LOG_FILE` — JSONL log destination
 - `SIN_CODER_QWEN_ARTIFACT_DIR` — screenshot output directory
 - `SIN_CODER_QWEN_MEMORY_FILE` — persistent consult memory file (defaults to `.coder-sin-qwen-memory.json`)
+- `SIN_CODER_QWEN_CONVERSATION_FILE` — local conversation-tree store (defaults to `.coder-sin-qwen-conversations.json`)
+- `SIN_CODER_QWEN_MAX_PROMPT_LENGTH` — browser-input ceiling before the relay truncates oversized prompts with a marker (defaults to `12000`)
 - `SIN_CODER_QWEN_AUTOTRAINING_FILE` — JSONL file for autotraining snapshots/suggestions
+- `SIN_CODER_QWEN_RUN_ID` / `SIN_CODER_QWEN_TRACE_ID` / `SIN_CODER_QWEN_SPAN_ID` / `SIN_CODER_QWEN_PARENT_SPAN_ID` / `SIN_CODER_QWEN_SESSION_ID` — trace and chat-session correlation fields written into logs, snapshots, and browser tab binding
+- `SIN_CODER_QWEN_PUBLIC_TASK_FILE` — `auto` (default), `always`, or `off` for temporary public Markdown task packets
 - `INFISICAL_ENV_NAME` — Infisical environment slug for sync commands
 - `INFISICAL_SECRET_PATH` — Infisical folder path for sync commands
 - `INFISICAL_PROJECT_ID` — Infisical project id for non-interactive pull/push flows
@@ -202,6 +247,21 @@ If the recovered session lands on the Qwen auth page, the relay uses direct emai
 - `SIN_CODER_QWEN_REQUIRE_PROFILE=1` — force preflight to fail when the Chrome profile is missing
 - `.qwenignore` — preferred token-saving context filter
 - `--snapshot` — create a Git snapshot before the Qwen run
+
+Runtime validation rejects unsupported auth modes and invalid timeout/port values before the browser starts.
+Rate-limit failures are tracked in `QWEN_ACCOUNT_STATE_FILE`; once the threshold is reached, the circuit breaker pauses account rotation until the cooldown expires.
+Trace fields are injected automatically so JSONL logs, smoke output, consult memory, and autotraining snapshots can be correlated across a single run.
+Consult memory writes now use an atomic temp+rename path so `.coder-sin-qwen-memory.json` is not left half-written on abrupt exits.
+Simple prompts now get normalized into a structured task message instead of being forwarded verbatim.
+Wrapper prefixes like `/ask-qwen` are stripped before Qwen sees the prompt.
+CDP attach now forces `PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR=1` so Playwright can connect without the Browser.setDownloadBehavior error.
+CDP endpoint probes now go through one bounded helper with abort-based timeouts so stale debug ports fail fast instead of hanging the relay.
+The relay now waits for a stable non-empty assistant answer before it reasserts model settings or finishes the turn.
+If completion stability times out or the extracted text looks truncated/broken, the run now fails closed instead of returning partial DOM/OCR fallback output.
+The browser input boundary now strips `/ask-qwen`, rejects CLI artifacts, and truncates oversized prompts with a structured `prompt_truncated` log event before typing into Qwen.
+Conversation-tree branching is fully local and file-backed; branch history is expanded into prompt context before the browser send step, while the browser/session lifecycle itself stays unchanged.
+Tree rendering now marks the active branch path and latest node explicitly, and `--json` responses include the active path plus flattened role history for the stored conversation branch.
+`--checkout` persists a local active node so future runs can continue from that branch without repeating `--branch`, and `--prepare-commit` stages changes plus prints a diff summary without creating a commit.
 
 ## OpenCode
 
@@ -222,10 +282,17 @@ The wrapper has been verified end-to-end against Qwen in attach mode; it now sen
 
 Extra Qwen turns are now opt-in only. Use `--turns 2` or higher when you explicitly want a same-chat follow-up.
 
+Each run now binds to one dedicated Qwen tab/session via a session id marker, so parallel agents do not cross-read or reuse the wrong chat.
+
+Prompt shaping is centralized in `prompt-builder.js`, which keeps repo-aware turns in a strict code-oriented schema before they reach Qwen.
+URL-bearing context is only rendered when `context.urlAccessibility === 'public'`; private or unreachable URLs are stripped and replaced with local-only metadata.
+When repo URLs are not public, the relay can also write a temporary Markdown task packet under `coder-sin-qwen-tasks/` and publish it as a short-lived public GitHub Gist so Qwen can inspect the same context via a public URL.
+
 For repo-aware prompts, the relay now also includes:
 - the repository web URL
 - commit URL
 - selected file URLs from the current repo state
+- ranked source files plus PDFs/text/logs can be attached when useful; image files stay local-only and are not uploaded to Qwen
 - issue URLs explicitly present in the task
 - capability manifest entries that describe the relay's evidence/tool boundaries
 - curated official reference URLs for relevant technologies such as Node.js, Playwright, GitHub Actions, and Infisical when applicable
@@ -235,9 +302,16 @@ For repo-aware prompts, the relay now also includes:
 - an autotraining module that stores snapshot/suggestion pairs for iterative Qwen-guided self-improvement
 - a lifecycle manager that tracks browser/CLI resources and performs bounded graceful cleanup on shutdown or fatal process events
 
+Prompt budgeting notes:
+- outbound URL-bearing context is capped at 10 unique URLs per message
+- set `SIN_CODER_QWEN_MAX_URLS` to temporarily raise the URL cap (bounded to 25)
+- decision history is trimmed to the last 2 relevant turns
+- image files stay local-only; ranked source files plus PDFs/text/logs are eligible upload formats
+
 Public/private behavior:
-- public repos: prefer repo/file/issue URLs plus official provider/platform docs links
+- public repos: prefer repo/file/issue URLs plus official provider/platform docs links, and upload a small ranked set of relevant local source files so Qwen can inspect exact code when needed
 - private repos: attach relevant local files instead of relying on inaccessible repo URLs
+- image files are not sent to Qwen; describe them locally before asking Qwen to reason about them
 
 Resolved milestones:
 

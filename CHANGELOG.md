@@ -1,33 +1,39 @@
 # Changelog
 
-## Unreleased
+## [Unreleased]
 
-- fixed Qwen send-button detection for the current web UI
-- reduced context noise by excluding sidecar/artifact directories from `.qwenignore`
-- taught the parser to prefer the final assistant JSON over echoed prompt JSON
-- removed the forced `End with {"status":"draft"|"final"}` suffix so Qwen receives a normal message
-- switched the default CLI output to raw Qwen text and added explicit `--json` mode
-- auto-select `Qwen3.6-Max-Preview` before sending live prompts
-- keep extra Qwen turns opt-in only, continue them in the same chat, and wait for assistant text to stabilize before reading it
-- replace the local shell wrapper with the canonical repo-local `/ask-qwen` command in `.opencode/opencode.json`
-- re-assert `Qwen3.6-Max-Preview` after each completed turn so the chat does not drift back to Plus
-- include repository URLs, relevant file URLs, and curated official reference URLs in repo-aware Qwen prompts
-- add persistent consult memory with `context_id`, `message_id`, and compact summaries for repo-aware sessions
-- upgrade consult memory to a canonical `state_snapshot` envelope with decision history and metadata
-- add a deterministic validator/critic pass that scores replies, flags violations, and strips fluff when appropriate
-- add `modul-qwen-autotraining` and `cli-autotraining.js` for Qwen-guided self-improvement snapshots and suggestions
-- add `lifecycle.js` for bounded graceful shutdown and resource cleanup across CLI/browser flows
-- enforce the Qwen thinking selector onto `Denken` / `Thinking` before each send
-- add keyboard-safe prompt injection with a faster insert fallback for long prompts so Qwen messages are less likely to truncate
-- add external-project mode with `--project-root`, issue URLs, capability manifests, and private-repo attachment candidates
-- add launcher-side CDP recovery that probes endpoints and can auto-start the sidecar before retrying attach
-- make CDP recovery fail fast when no live endpoint can be established, instead of falling back to a broken locked-profile launch
-- make sidecar startup itself bounded and self-verifying so recovery does not hang indefinitely on blank launches
-- switch the recovery sidecar to a direct Chrome binary launch path with cloned startup URLs, crash-restore suppression, and a cleaner default debug port (`9444`)
-- add `--disable-search-engine-choice-screen` to Chrome launch paths to keep startup deterministic on newer builds
-- enforce the sidecar CDP attach path as the only supported runtime browser path
-- prefer direct email/password Qwen auth with Infisical-backed account rotation only
-- prefer auto-attach to a reachable local CDP endpoint in the shared launcher to avoid Chrome profile-lock failures
+### Fixed
+
+- **Conversation tree branch spawning** — same-session turns now append to the same branch instead of creating new children of root. `appendTurn()` in `conversation-tree-store.js` checks `sessionId` from metadata and finds the latest node with that session as the parent. This prevents "branch wastelands" where every relay call spawned a new root child. (Issue #17)
+- **`index.js` branch resolution** — `appendTurn()` now receives `resolvedBranchId` (which includes `tree.activeId`) instead of raw `branchId`, so the already-resolved active branch is used as the parent when no explicit `--branch` flag is provided.
+- **`setActiveNode` condition** — changed from `Boolean(!branchId && tree?.activeId)` to `Boolean(tree)` so new nodes always become active when a tree exists, not only when `branchId` is falsy.
+- **PCPM project ID** — renamed from `omo-SIN-Qwen` to `coder-SIN-Qwen` across hooks, config, and AGENTS.md.
+
+### Removed
+
+- **Garbage test nodes** — cleaned 2 stale smoke-test entries from `.coder-sin-qwen-conversations.json` that were inflating the root's child count without real conversation content.
+
+### Added (from PR #21 — sidecar auth repair)
+
+- repair sidecar attach auth flow and ban broken browser startups
+- browser hardening helpers for safe prompt injection and click guards
+- Qwen account rotation with Infisical-backed credential cycling
+- sidecar CDP attach as the only supported runtime browser path
+- fail-fast CDP recovery when no live endpoint can be established
+- direct email/password Qwen auth with account rotation only
+- auto-attach to reachable local CDP endpoint in shared launcher
+- enforce Qwen thinking selector before each send
+- keyboard-safe prompt injection with faster insert fallback for long prompts
+- persistent consult memory with `context_id`, `message_id`, and compact summaries
+- deterministic validator/critic pass that scores replies and strips fluff
+- `modul-qwen-autotraining` and `cli-autotraining.js` for Qwen-guided self-improvement
+- `lifecycle.js` for bounded graceful shutdown and resource cleanup
+- external-project mode with `--project-root`, issue URLs, and capability manifests
+- conversation tree with local file-backed branching and `--tree`/`--branch`/`--checkout` CLI
+- `--prepare-commit` for staging changes without creating a commit
+- trace context with `runId`, `traceId`, `spanId` correlation across logs and snapshots
+- public task file with temporary GitHub Gist publishing for private repos
+- prompt builder for centralized repo-aware turn construction
 
 ## 0.1.0
 

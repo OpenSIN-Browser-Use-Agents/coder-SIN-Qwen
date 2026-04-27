@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
+import { probeCdpEndpoint } from './lib/cdp-probe.js';
 
 const DEFAULT_QWEN_URL = 'https://chat.qwen.ai';
 const BLOCKED_SIDECAR_ITEMS = new Set([
@@ -51,15 +52,8 @@ export function buildCandidateCdpUrls(env = process.env) {
 }
 
 export async function isReachableCdp(baseUrl) {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1500);
-    const response = await fetch(`${baseUrl.replace(/\/$/u, '')}/json/version`, { signal: controller.signal });
-    clearTimeout(timeout);
-    return response.ok;
-  } catch {
-    return false;
-  }
+  const probe = await probeCdpEndpoint(baseUrl, 1500);
+  return probe.ok;
 }
 
 export async function ensureReachableCdp({ repoRoot, env = process.env, timeoutMs = 20_000 } = {}) {

@@ -45,6 +45,27 @@ test('fails repo-access denial when repo context exists', () => {
   assert.ok(review.violations.some((entry) => entry.rule === 'repo_access_denial'));
 });
 
+test('fails completion soft timeouts and malformed replies', () => {
+  const review = validateConsultResponse({
+    reply: 'bash\n1\n2\nnpm test -- test/wait-for-completion.test.js\nnpm run verify',
+    parsed: { plan: 'freeform' },
+    context: {
+      completionCriteria: ['Return production-ready output only.'],
+      constraints: []
+    },
+    completion: {
+      status: 'soft_timeout',
+      softTimeout: true,
+      source: 'completion_wait',
+      note: 'Stable reply wait exceeded limit'
+    }
+  });
+
+  assert.equal(review.pass, false);
+  assert.equal(review.retry_action, 'regenerate');
+  assert.ok(review.violations.some((entry) => entry.rule === 'completion_timeout'));
+});
+
 test('stripFluff removes boilerplate filler', () => {
   const cleaned = stripFluff('Sure, as an AI language model, I hope this helps.');
   assert.equal(cleaned.length > 0, true);

@@ -7,16 +7,17 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
 import { buildCandidateCdpUrls } from './cdp-recovery.js';
-import { getScopedEnv } from './runtime-config.js';
+import { getScopedEnv, validateRuntimeConfig } from './runtime-config.js';
 
 const execFileAsync = promisify(execFile);
 
 export async function runPreflight() {
+  const runtimeConfig = validateRuntimeConfig();
   const launchConfig = resolveChromeConnectionConfig();
   const nodeMajor = Number(process.versions.node.split('.')[0] || 0);
   const requireProfile = getScopedEnv('REQUIRE_PROFILE', '0') === '1' || (!process.env.CI && getScopedEnv('DRY_RUN', '0') !== '1');
   const lockState = detectChromeProfileLock(launchConfig);
-  const allowedSidecarUrl = `http://127.0.0.1:${process.env.CHROME_REMOTE_DEBUGGING_PORT || '9444'}`;
+  const allowedSidecarUrl = `http://127.0.0.1:${runtimeConfig.chromeRemoteDebuggingPort}`;
   const configuredAttachUrl = String(process.env.CHROME_CDP_URL || '').trim();
   const connectionPolicyOk = !configuredAttachUrl || configuredAttachUrl === allowedSidecarUrl;
   const checks = {
@@ -39,7 +40,16 @@ export async function runPreflight() {
       policyOk: connectionPolicyOk,
       policyMessage: connectionPolicyOk ? '' : `CHROME_CDP_URL must match the prepared sidecar endpoint (${allowedSidecarUrl}).`
     },
-    chromeLock: lockState
+    chromeLock: lockState,
+    runtimeConfig: {
+      authMethod: runtimeConfig.authMethod,
+      dryRun: runtimeConfig.dryRun,
+      sessionTimeoutMs: runtimeConfig.sessionTimeoutMs,
+      rateLimitCooldownHours: runtimeConfig.rateLimitCooldownHours,
+      rateLimitFailureThreshold: runtimeConfig.rateLimitFailureThreshold,
+      rateLimitCircuitBreakerMinutes: runtimeConfig.rateLimitCircuitBreakerMinutes,
+      chromeRemoteDebuggingPort: runtimeConfig.chromeRemoteDebuggingPort
+    }
   };
 
   return {

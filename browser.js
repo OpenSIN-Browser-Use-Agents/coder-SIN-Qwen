@@ -1,14 +1,71 @@
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
-import { chromium } from 'playwright';
-import { safeInjectInput } from './browser-hardening.js';
-import { defaultCooldownUntil, hasQwenAccounts, loadQwenAccountState, loadQwenAccounts, markAccountCooldown, markAccountPreferred, resolveQwenAccountStatePath, saveQwenAccountState, selectNextQwenAccounts } from './qwen-account-rotation.js';
+import { assertCompleteReply, normalizeRenderedReplyText, safeInjectInput } from './browser-hardening.js';
+import { hasQwenAccounts, isRateLimitCircuitOpen, loadQwenAccountState, loadQwenAccounts, markAccountPreferred, markRateLimitFailure, markRateLimitSuccess, resolveQwenAccountStatePath, resolveQwenRateLimitPolicy, saveQwenAccountState, selectNextQwenAccounts } from './qwen-account-rotation.js';
 import { registerLifecycleResource, unregisterLifecycleResource } from './lifecycle.js';
+import { writeLogEntry } from './logger.js';
+import { probeCdpEndpoint } from './lib/cdp-probe.js';
+import { guardPromptLength } from './lib/prompt-guard.js';
 import { getScopedEnv } from './runtime-config.js';
+import { installTraceContext, readTraceContext } from './trace.js';
+import { buildPromptPayload } from './prompt-builder.js';
+import { waitForQwenCompletion } from './lib/wait-for-completion.js';
+
+export { buildPromptPayload };
+
+const require = createRequire(import.meta.url);
+
+let chromiumModulePromise;
+let cdpCompatibilityPatched = false;
+let qwenCompletionMetadata = {
+  status: 'idle',
+  softTimeout: false,
+  source: '',
+  note: ''
+};
+
+function updateQwenCompletionMetadata(patch) {
+  qwenCompletionMetadata = {
+    ...qwenCompletionMetadata,
+    ...patch
+  };
+  return qwenCompletionMetadata;
+}
+
+function isTimeoutLikeError(error) {
+  const message = String(error?.message || '');
+  const name = String(error?.name || '');
+  const code = String(error?.code || '');
+  return code === 'ETIMEDOUT' || name === 'TimeoutError' || /timed?\s*out|timeout|stabilisierte sich nicht/iu.test(message);
+}
+
+export function getQwenCompletionMetadata() {
+  return { ...qwenCompletionMetadata };
+}
+
+export function resetQwenCompletionMetadata() {
+  qwenCompletionMetadata = {
+    status: 'idle',
+    softTimeout: false,
+    source: '',
+    note: ''
+  };
+  return qwenCompletionMetadata;
+}
+
+async function getChromium() {
+  if (!chromiumModulePromise) {
+    chromiumModulePromise = import('playwright').then((module) => module.chromium);
+  }
+  return chromiumModulePromise;
+}
 
 const QWEN_URL = 'https://chat.qwen.ai';
+const QWEN_SESSION_STORAGE_KEY = 'coder_sin_qwen_session_id';
+const QWEN_SESSION_NAME_PREFIX = 'coder-sin-qwen-session:';
 // Centralized selector map so UI changes stay localized.
 export const SELECTORS = {
   newChat: ['.sidebar-entry-fixed-list-content', '.sidebar-entry-fixed-list-text', 'button:has-text("New Chat")', 'button:has-text("Neuer Chat")', 'button:has-text("Neue Unterhaltung")', 'text=Neue Unterhaltung', '[data-testid="new-chat"]'],
@@ -31,8 +88,15 @@ export async function runQwenSession(input, options = {}) {
   // The browser relay can stay in one chat when explicit multi-turn behavior is requested.
   const maxTurns = Number(options.maxTurns || 1);
   const originalPrompt = options.originalPrompt || (typeof input === 'string' ? input : input?.prompt || '');
+  const completionTimeoutMs = resolveCompletionTimeoutMs(options.sessionTimeoutMs);
+  const trace = installTraceContext(process.env);
+  const sessionId = resolveQwenSessionId(options, trace);
   const connectionConfig = resolveChromeConnectionConfig();
-  ensureProfileExists(connectionConfig.profilePath);
+  resetQwenCompletionMetadata();
+  const profileCheck = await resolveChromeProfileCheck(connectionConfig);
+  if (profileCheck.requireProfileCheck) {
+    ensureProfileExists(connectionConfig.profilePath);
+  }
   const session = await openChromeSession(connectionConfig, {
     headless: false,
     channel: 'chrome',
@@ -44,15 +108,20 @@ export async function runQwenSession(input, options = {}) {
       '--disable-backgrounding-occluded-windows',
       '--disable-features=TranslateUI,IsolateOrigins,site-per-process'
     ],
-    ignoreDefaultArgs: ['--enable-automation']
-  });
+      ignoreDefaultArgs: ['--enable-automation']
+    });
 
   let page = session.page;
   try {
-    await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await waitForStableUi(page);
-    page = await ensureQwenAuthenticated(page);
-    await maybeStartNewChat(page);
+    if (!session.existingSession || !/chat\.qwen\.ai/iu.test(page.url())) {
+      await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+      await waitForStableUi(page);
+    }
+    await bindQwenSession(page, sessionId);
+    await assertQwenSessionBinding(page, sessionId);
+    page = await ensureQwenAuthenticated(page, sessionId);
+    await maybeStartNewChat(page, { forceFresh: true });
+    await bindQwenSession(page, sessionId);
     await maybeSelectModel(page);
     await ensureMaxPreviewSelected(page);
     await ensureThinkingModeSelected(page);
@@ -66,6 +135,7 @@ export async function runQwenSession(input, options = {}) {
     let responseText = '';
 
     for (let turn = 1; turn <= maxTurns; turn += 1) {
+      await assertQwenSessionBinding(page, sessionId);
       const previousAssistantState = await getLastAssistantState(page);
       await ensureMaxPreviewSelected(page);
       await ensureThinkingModeSelected(page);
@@ -74,12 +144,12 @@ export async function runQwenSession(input, options = {}) {
         await maybeUploadContextAttachments(page, input);
       }
       
+      await bindQwenSession(page, sessionId);
       await enterPrompt(page, inputBox, currentPrompt);
       await submitPrompt(page, inputBox, currentPrompt, previousAssistantState);
-      await waitForStreamingDone(page, previousAssistantState);
+      responseText = await waitForStreamingDone(page, previousAssistantState, currentPrompt, { completionTimeoutMs });
       await waitForPromptReady(page);
 
-      responseText = await getLastAssistantText(page);
       if (!responseText) {
         throw new Error('No assistant response could be extracted from the Qwen UI.');
       }
@@ -102,6 +172,7 @@ export async function runQwenSession(input, options = {}) {
       const selectorReport = await collectSelectorReport(page).catch(() => ({}));
       const reportPath = await writeArtifactJson('run-failed-selectors', {
         error: error?.message || String(error),
+        trace: readTraceContext(),
         selectorReport,
         selectorSummary: summarizeSelectorReport(selectorReport)
       }).catch(() => '');
@@ -118,8 +189,13 @@ export async function runQwenSession(input, options = {}) {
 
 export async function runBrowserE2ECheck() {
   // Lightweight browser proof that the page opens and the input is still discoverable.
+  const trace = installTraceContext(process.env);
+  const sessionId = resolveQwenSessionId({}, trace);
   const connectionConfig = resolveChromeConnectionConfig();
-  ensureProfileExists(connectionConfig.profilePath);
+  const profileCheck = await resolveChromeProfileCheck(connectionConfig);
+  if (profileCheck.requireProfileCheck) {
+    ensureProfileExists(connectionConfig.profilePath);
+  }
 
   const session = await openChromeSession(connectionConfig, {
     headless: false,
@@ -133,13 +209,17 @@ export async function runBrowserE2ECheck() {
 
   let page = session.page;
   try {
-    await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await waitForStableUi(page);
-    page = await ensureQwenAuthenticated(page);
+    if (!session.existingSession || !/chat\.qwen\.ai/iu.test(page.url())) {
+      await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+      await waitForStableUi(page);
+    }
+    await bindQwenSession(page, sessionId);
+    await assertQwenSessionBinding(page, sessionId);
+    page = await ensureQwenAuthenticated(page, sessionId);
     const artifactPaths = [];
     artifactPaths.push(await captureScreenshot(page, 'smoke-01-loaded'));
 
-    const newChat = await maybeStartNewChat(page);
+    const newChat = await maybeStartNewChat(page, { forceFresh: true });
     artifactPaths.push(await captureScreenshot(page, 'smoke-02-after-new-chat'));
 
     const modelSelection = await maybeSelectModel(page);
@@ -181,6 +261,7 @@ export async function runBrowserE2ECheck() {
       title: await page.title().catch(() => ''),
       inputFound,
       authOverlayDetected,
+      trace: readTraceContext(),
       profilePath: connectionConfig.profilePath,
       userDataDir: connectionConfig.userDataDir,
       profileDirectory: connectionConfig.profileDirectory,
@@ -204,100 +285,91 @@ export async function sendToQwen(input) {
   return runQwenSession(input, { maxTurns: 1 });
 }
 
-export function buildPromptPayload(context) {
-  // Keep payload generation deterministic, but phrase structured context like a normal operator message.
-  if (typeof context === 'string') return context;
-
-  const files = Array.isArray(context.files) ? context.files : [];
-  const fileReferences = Array.isArray(context.fileReferences) ? context.fileReferences : [];
-  const issueReferences = Array.isArray(context.issueReferences) ? context.issueReferences : [];
-  const attachmentCandidates = Array.isArray(context.attachmentCandidates) ? context.attachmentCandidates : [];
-  const capabilityManifest = Array.isArray(context.capabilityManifest) ? context.capabilityManifest : [];
-  const references = Array.isArray(context.references) ? context.references : [];
-  const stateSnapshot = context.stateSnapshot || null;
-  const envelope = stateSnapshot?.stateSnapshot || null;
-  const decisionHistory = Array.isArray(stateSnapshot?.decisionHistory) ? stateSnapshot.decisionHistory : [];
-  const constraints = Array.isArray(context.constraints) ? context.constraints : [];
-  const completionCriteria = Array.isArray(context.completionCriteria) ? context.completionCriteria : [];
-  const rules = Array.isArray(context.rules) ? context.rules : [];
-  const scripts = context.package?.scripts?.join(', ') || 'N/A';
-  const dependencies = context.package?.dependencies?.join(', ') || 'N/A';
-
-  return [
-    `Task:\n${context.prompt}`,
-    'Repository context:',
-    `- cwd: ${context.repo?.cwd || 'N/A'}`,
-    `- remote: ${context.repo?.remote || 'N/A'}`,
-    `- branch: ${context.repo?.branch || 'N/A'}`,
-    `- head: ${context.repo?.head || 'N/A'}`,
-    `- dirty: ${Boolean(context.repo?.dirty)}`,
-    `- visibility: ${context.repo?.visibility || 'N/A'}`,
-    `- repo url: ${context.repo?.urls?.web || 'N/A'}`,
-    `- commit url: ${context.repo?.urls?.commit || 'N/A'}`,
-    '',
-    'Persistent consult state:',
-    `- protocol version: ${stateSnapshot?.protocolVersion || 'N/A'}`,
-    `- context id: ${stateSnapshot?.metadata?.contextId || 'N/A'}`,
-    `- message id: ${stateSnapshot?.messageId || 'N/A'}`,
-    `- previous message id: ${stateSnapshot?.metadata?.previousMessageId || 'N/A'}`,
-    `- sender: ${stateSnapshot?.metadata?.sender || 'N/A'}`,
-    `- receiver: ${stateSnapshot?.metadata?.receiver || 'N/A'}`,
-    `- mandate: ${stateSnapshot?.mandate || 'N/A'}`,
-    `- previous summary: ${stateSnapshot?.previousSummary || 'N/A'}`,
-    '',
-    'State snapshot:',
-    `- repository url: ${envelope?.repositoryUrl || context.repo?.urls?.web || 'N/A'}`,
-    `- commit url: ${envelope?.commitUrl || context.repo?.urls?.commit || 'N/A'}`,
-    `- tree url: ${envelope?.treeUrl || context.repo?.urls?.tree || 'N/A'}`,
-    `- branch: ${envelope?.branch || context.repo?.branch || 'N/A'}`,
-    `- head: ${envelope?.head || context.repo?.head || 'N/A'}`,
-    `- dirty: ${String(envelope?.dirty ?? context.repo?.dirty ?? false)}`,
-    '',
-    'Decision history:',
-    ...decisionHistory.map((entry) => `- ${entry.timestamp || 'N/A'} [${entry.status || 'unknown'}]: ${entry.summary || entry.prompt || 'N/A'}`),
-    '',
-    'Package context:',
-    `- name: ${context.package?.name || 'N/A'}`,
-    `- version: ${context.package?.version || 'N/A'}`,
-    `- scripts: ${scripts}`,
-    `- dependencies: ${dependencies}`,
-    '',
-    'Relevant files:',
-    ...files.map((file) => `- ${file}`),
-    '',
-    'Relevant file URLs:',
-    ...fileReferences.map((file) => `- ${file.path}: ${file.url || 'private_repo_attachment'}`),
-    '',
-    'Issue URLs:',
-    ...issueReferences.map((issue) => `- ${issue.url}`),
-    '',
-    'Attachment files:',
-    ...attachmentCandidates.map((file) => `- ${file.path} (${file.reason}, ${file.size} bytes)`),
-    '',
-    'Capability manifest:',
-    ...capabilityManifest.map((capability) => `- ${capability.name}: ${capability.supported ? 'supported' : 'not supported'} (${capability.reason})`),
-    '',
-    'Reference URLs:',
-    ...references.map((reference) => `- ${reference.label}: ${reference.url} (${reference.reason})`),
-    '',
-    'Constraints:',
-    ...constraints.map((constraint) => `- ${constraint}`),
-    '',
-    'Completion criteria:',
-    ...completionCriteria.map((criterion) => `- ${criterion}`),
-    '',
-    'Rules:',
-    ...rules.map((rule) => `- ${rule}`),
-    '',
-    'Please reply like a normal coding assistant and keep the answer directly useful.'
-  ].join('\n');
-}
-
 export function buildSessionPrompt(input) {
   const payload = buildPromptPayload(input);
   return typeof input === 'string'
-    ? payload
+    ? sanitizePromptForBrowser(payload)
     : payload;
+}
+
+export function resolveQwenSessionId(options = {}, trace = readTraceContext()) {
+  return String(options.sessionId || options.qwenSessionId || trace.sessionId || trace.runId || '').trim();
+}
+
+export function getQwenSessionMarker(sessionId) {
+  return `${QWEN_SESSION_NAME_PREFIX}${String(sessionId || '').trim()}`;
+}
+
+export function isQwenSessionBinding(binding, sessionId) {
+  const marker = getQwenSessionMarker(sessionId);
+  return Boolean(sessionId) && (binding?.windowName === marker || binding?.sessionStorageId === String(sessionId).trim());
+}
+
+async function bindQwenSession(page, sessionId) {
+  const resolvedSessionId = String(sessionId || '').trim();
+  if (!resolvedSessionId) return;
+
+  const marker = getQwenSessionMarker(resolvedSessionId);
+  await page.evaluate(({ key, markerValue, sessionValue }) => {
+    try {
+      window.name = markerValue;
+    } catch {
+      // Ignore windows that refuse reassignment.
+    }
+
+    try {
+      sessionStorage.setItem(key, sessionValue);
+    } catch {
+      // Ignore origin transitions and storage restrictions; window.name still keeps the tab bound.
+    }
+  }, {
+    key: QWEN_SESSION_STORAGE_KEY,
+    markerValue: marker,
+    sessionValue: resolvedSessionId
+  }).catch(() => {});
+}
+
+async function readQwenSessionBinding(page) {
+  return await page.evaluate(({ key }) => {
+    let sessionStorageId = '';
+    try {
+      sessionStorageId = String(sessionStorage.getItem(key) || '').trim();
+    } catch {
+      sessionStorageId = '';
+    }
+
+    return {
+      windowName: String(window.name || '').trim(),
+      sessionStorageId
+    };
+  }, { key: QWEN_SESSION_STORAGE_KEY }).catch(() => ({ windowName: '', sessionStorageId: '' }));
+}
+
+async function assertQwenSessionBinding(page, sessionId) {
+  const binding = await readQwenSessionBinding(page);
+  if (!isQwenSessionBinding(binding, sessionId)) {
+    throw new Error(`Qwen session binding mismatch. Expected session ${sessionId || 'unknown'} but found ${binding.windowName || binding.sessionStorageId || 'unbound tab'}.`);
+  }
+}
+
+export function sanitizePromptForBrowser(prompt) {
+  const text = String(prompt || '').trim();
+  if (!text) return '';
+
+  const cleaned = text.replace(/^\/?ask-qwen\s*/iu, '').trim();
+  if (/^(?:node\s|npm\s|npx\s|bash\s|sh\s|\$|>\s)/iu.test(cleaned)) {
+    throw new Error('CLI artifact detected in prompt. Relay forwards natural-language tasks only.');
+  }
+
+  return cleaned || text;
+}
+
+export function resolvePromptUrlBudget(env = process.env) {
+  const raw = String(env.SIN_CODER_QWEN_MAX_URLS || '').trim();
+  if (!raw) return 10;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) return 10;
+  return Math.min(parsed, 25);
 }
 
 export async function withRetry(fn, attempts = 3) {
@@ -371,6 +443,42 @@ export function resolveChromeLaunchConfig() {
   };
 }
 
+export function shouldRequireChromeProfilePath(connectionConfig = resolveChromeConnectionConfig()) {
+  return connectionConfig.mode !== 'attach';
+}
+
+export async function resolveChromeProfileCheck(connectionConfig = resolveChromeConnectionConfig(), options = {}) {
+  if (shouldRequireChromeProfilePath(connectionConfig)) {
+    return { requireProfileCheck: true, probeLatencyMs: 0 };
+  }
+
+  if (!connectionConfig.cdpUrl) {
+    throw new Error('Attach mode requested without a CDP URL. Refusing to skip the cloned sidecar profile check.');
+  }
+
+  const probeTimeoutMs = Number(options.probeTimeoutMs || 2500);
+  const probeFn = options.probeFn || probeChromeCdpEndpoint;
+  const logFn = options.logFn || writeLogEntry;
+  const probe = await probeFn(connectionConfig.cdpUrl, probeTimeoutMs);
+
+  if (!probe.ok) {
+    throw new Error(`Refusing to skip the cloned sidecar profile check because the prepared CDP endpoint is not reachable at ${connectionConfig.cdpUrl}.`);
+  }
+
+  const probeLatencyMs = Number(probe.latencyMs || 0);
+  await Promise.resolve(logFn({
+    event: 'attach_mode_skip_sidecar_profile_check',
+    cdpUrl: connectionConfig.cdpUrl,
+    probeLatencyMs
+  }, options.logFile)).catch(() => {});
+
+  return { requireProfileCheck: false, probeLatencyMs };
+}
+
+export async function probeChromeCdpEndpoint(cdpUrl, timeoutMs = 2500) {
+  return probeCdpEndpoint(cdpUrl, timeoutMs);
+}
+
 function defaultChromeUserDataDir() {
   const platform = os.platform();
   return platform === 'darwin'
@@ -390,13 +498,77 @@ function ensureProfileExists(profilePath) {
 async function connectToChrome(launchConfig) {
   // CDP attach mode keeps the user's existing Chrome session alive instead of spawning a second browser.
   try {
-    return await chromium.connectOverCDP(launchConfig.cdpUrl);
+    ensureChromiumCdpCompatibility();
+    const chromium = await getChromium();
+    const channel = chromium?._channel;
+    const originalConnectOverCDP = channel?.connectOverCDP?.bind(channel);
+    if (typeof originalConnectOverCDP !== 'function') {
+      throw new Error('Playwright Chromium channel does not expose connectOverCDP.');
+    }
+
+    channel.connectOverCDP = (params) => originalConnectOverCDP(buildSafeCdpConnectParams(params));
+    try {
+      return await chromium.connectOverCDP(launchConfig.cdpUrl, { isLocal: true });
+    } finally {
+      channel.connectOverCDP = originalConnectOverCDP;
+    }
   } catch (error) {
     throw new Error(`Failed to attach to Chrome via CDP at ${launchConfig.cdpUrl}. Make sure Chrome is already running with remote debugging enabled. Original error: ${error?.message || String(error)}`);
   }
 }
 
-async function openChromeSession(launchConfig) {
+export function buildSafeCdpConnectParams(params = {}) {
+  return {
+    ...params,
+    isLocal: params?.isLocal ?? true,
+    acceptDownloads: 'internal-browser-default'
+  };
+}
+
+export function ensureChromiumCdpCompatibility() {
+  // Playwright can otherwise try Browser.setDownloadBehavior on CDP connections,
+  // which some Chrome/Chromium sessions reject with a context-management error.
+  if (!process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR) {
+    process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR = '1';
+  }
+  patchPlaywrightCdpDownloadBehaviorHandling();
+  return process.env.PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR;
+}
+
+export function buildSafePersistentContextOptions(options = {}) {
+  return {
+    ...options,
+    acceptDownloads: options.acceptDownloads || 'internal-browser-default'
+  };
+}
+
+function patchPlaywrightCdpDownloadBehaviorHandling() {
+  if (cdpCompatibilityPatched) return;
+  const playwrightCoreRoot = path.dirname(require.resolve('playwright-core/package.json'));
+  const crConnectionModule = require(path.join(playwrightCoreRoot, 'lib/server/chromium/crConnection.js'));
+  const originalSend = crConnectionModule.CRSession?.prototype?.send;
+  if (typeof originalSend !== 'function') {
+    throw new Error('Playwright CRSession.send is unavailable for CDP compatibility patching.');
+  }
+
+  crConnectionModule.CRSession.prototype.send = async function patchedSend(method, params) {
+    try {
+      return await originalSend.call(this, method, params);
+    } catch (error) {
+      if (method === 'Browser.setDownloadBehavior' && isUnsupportedDownloadBehaviorError(error)) {
+        return {};
+      }
+      throw error;
+    }
+  };
+  cdpCompatibilityPatched = true;
+}
+
+function isUnsupportedDownloadBehaviorError(error) {
+  return /Browser\.setDownloadBehavior/iu.test(String(error?.message || error)) && /Browser context management is not supported/iu.test(String(error?.message || error));
+}
+
+async function openChromeSession(launchConfig, options = {}) {
   if (launchConfig.mode !== 'attach' || !launchConfig.cdpUrl) {
     throw new Error('Browser startup is banned unless the sidecar CDP attach path is ready. Run the sidecar preparation step first.');
   }
@@ -412,7 +584,8 @@ async function openChromeSession(launchConfig) {
     throw new Error('Attached Chrome session does not expose a usable browser context.');
   }
 
-  const page = await getAttachPage(context);
+  const sessionId = resolveQwenSessionId(options, installTraceContext(process.env));
+  const { page, existingSession } = await getAttachPage(context, sessionId);
   const resourceId = `browser:${Date.now()}:attach`;
   const closeBrowser = createBrowserSessionCloser(browser);
   registerLifecycleResource(resourceId, async () => {
@@ -420,6 +593,8 @@ async function openChromeSession(launchConfig) {
   });
   return {
     page,
+    existingSession,
+    sessionId,
     close: async () => {
       // In CDP attach mode, Playwright closes only its own connection and leaves the operator's Chrome running.
       unregisterLifecycleResource(resourceId);
@@ -452,13 +627,29 @@ export function detectChromeProfileLock(launchConfig = resolveChromeLaunchConfig
   return { locked: false, reason: '' };
 }
 
-async function getAttachPage(context) {
+async function getAttachPage(context, sessionId) {
   const pages = context.pages();
-  const qwenPage = pages.find((page) => /chat\.qwen\.ai/iu.test(page.url()));
+  const matches = [];
 
-  if (qwenPage) return qwenPage;
-  if (pages[0]) return pages[0];
-  return context.newPage();
+  for (const page of pages) {
+    const binding = await readQwenSessionBinding(page).catch(() => null);
+    if (isQwenSessionBinding(binding, sessionId)) {
+      matches.push(page);
+    }
+  }
+
+  if (matches.length > 1) {
+    throw new Error(`Multiple Chrome tabs are already bound to the same Qwen session id (${sessionId}). Close the duplicates before retrying.`);
+  }
+
+  if (matches[0]) {
+    await bindQwenSession(matches[0], sessionId);
+    return { page: matches[0], existingSession: true };
+  }
+
+  const page = await context.newPage();
+  await bindQwenSession(page, sessionId);
+  return { page, existingSession: false };
 }
 
 async function waitForStableUi(page) {
@@ -467,14 +658,18 @@ async function waitForStableUi(page) {
   await page.waitForTimeout(2_000);
 }
 
-async function ensureQwenAuthenticated(page) {
+async function ensureQwenAuthenticated(page, sessionId) {
   // Prefer already-authenticated sessions. Direct email/password auth is the default when credentials are configured.
+  await assertQwenSessionBinding(page, sessionId);
   if (await hasInteractiveChat(page)) return page;
 
   const authVisible = await hasVisibleSelector(page, SELECTORS.authEntry) || /\/auth$/u.test(page.url());
   if (hasQwenAccounts(process.env)) {
-    const authenticated = await maybeLoginWithQwenAccounts(page).catch(() => null);
-    if (authenticated) return authenticated;
+    const authenticated = await maybeLoginWithQwenAccounts(page, sessionId).catch(() => null);
+    if (authenticated) {
+      await assertQwenSessionBinding(authenticated, sessionId);
+      return authenticated;
+    }
     throw new Error('Qwen direct email/password login failed. Check the configured Infisical-backed account credentials and account order.');
   }
 
@@ -547,37 +742,49 @@ async function dismissAuthWelcomeModal(page) {
   return false;
 }
 
-async function maybeLoginWithQwenAccounts(page) {
+async function maybeLoginWithQwenAccounts(page, sessionId) {
   const accounts = loadQwenAccounts(process.env);
   if (!accounts.length) return null;
 
+  const policy = resolveQwenRateLimitPolicy(process.env);
   const statePath = resolveQwenAccountStatePath(process.env);
   let nextState = await loadQwenAccountState(statePath);
   const orderedAccounts = selectNextQwenAccounts(accounts, nextState);
-  if (!orderedAccounts.length) return null;
+  if (!orderedAccounts.length) {
+    if (isRateLimitCircuitOpen(nextState)) {
+      throw new Error(`Qwen rate-limit circuit breaker is open until ${nextState.circuitBreakerUntil || 'the configured cooldown window expires'}.`);
+    }
+    return null;
+  }
 
-  const signinPage = await openDirectQwenSigninPage(page);
+  const signinPage = await openDirectQwenSigninPage(page, sessionId);
+  await bindQwenSession(signinPage, sessionId);
 
   for (const account of orderedAccounts) {
     const outcome = await tryEmailPasswordQwenLogin(signinPage, account);
     if (outcome.ok) {
-      nextState = markAccountPreferred(nextState, account.id);
+      nextState = markAccountPreferred(markRateLimitSuccess(nextState, account.id), account.id);
       await saveQwenAccountState(nextState, statePath);
       return outcome.page || signinPage;
     }
 
     if (outcome.rateLimited) {
-      nextState = markAccountCooldown(nextState, account.id, defaultCooldownUntil());
+      nextState = markRateLimitFailure(nextState, account.id, policy);
       await saveQwenAccountState(nextState, statePath);
       continue;
     }
   }
 
+  if (isRateLimitCircuitOpen(nextState)) {
+    throw new Error(`Qwen rate-limit circuit breaker is open until ${nextState.circuitBreakerUntil || 'the configured cooldown window expires'}.`);
+  }
+
   return null;
 }
 
-async function openDirectQwenSigninPage(page) {
+async function openDirectQwenSigninPage(page, sessionId) {
   const signinUrl = `${QWEN_URL}/auth?action=signin`;
+  await bindQwenSession(page, sessionId);
   if (!/\/auth\?action=signin/iu.test(page.url())) {
     await page.goto(QWEN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
     await waitForStableUi(page);
@@ -595,6 +802,7 @@ async function openDirectQwenSigninPage(page) {
   }
 
   await page.waitForLoadState('domcontentloaded').catch(() => {});
+  await bindQwenSession(page, sessionId);
   return page;
 }
 
@@ -661,25 +869,28 @@ async function findVisibleSelector(page, selectors, timeoutMs = 10_000) {
   return null;
 }
 
-function looksLikeQwenRateLimit(text) {
-  return /(?:daily\s+usage\s+limit|usage\s+limit|rate\s*limit|too\s+many\s+requests|come\s+back\s+in\s+\d+\s+hours|20\s+hours|20\s+h)/iu.test(String(text || ''));
+export function looksLikeQwenRateLimit(text) {
+  return /(?:daily\s+usage\s+limit|usage\s+limit|nutzungslimit|tägliche(?:s|m)?\s+nutzungslimit|rate\s*limit|too\s+many\s+requests|come\s+back\s+in\s+\d+\s+hours|bitte\s+warten\s+sie\s+\d+\s+stunden|warten\s+sie\s+\d+\s+stunden|\d+\s+stunden\s+bevor|20\s+hours|20\s+h)/iu.test(String(text || ''));
 }
 
 async function waitForAuthenticatedChat(page) {
   const started = Date.now();
   while (Date.now() - started < 90_000) {
-    for (const candidate of page.context().pages()) {
-      if (!/chat\.qwen\.ai/iu.test(candidate.url())) continue;
-      await candidate.waitForTimeout(300);
-      if (await hasInteractiveChat(candidate)) return candidate;
-    }
+    if (/chat\.qwen\.ai/iu.test(page.url()) && await hasInteractiveChat(page)) return page;
     await page.waitForTimeout(1000);
   }
+  await writeLogEntry({
+    event: 'qwen_auth_fallback_timeout',
+    timeoutMs: 90_000,
+    url: page.url()
+  }).catch(() => {});
   throw new Error('Qwen authentication did not complete; no interactive chat became available.');
 }
 
-async function maybeStartNewChat(page) {
-  const result = { found: false, clicked: false, selector: '' };
+async function maybeStartNewChat(page, { forceFresh = false } = {}) {
+  const result = { found: false, clicked: false, selector: '', skipped: !forceFresh };
+  if (!forceFresh) return result;
+
   for (const selector of SELECTORS.newChat) {
     const button = page.locator(selector).first();
     if (await button.count().catch(() => 0)) {
@@ -741,6 +952,12 @@ async function ensureMaxPreviewSelected(page) {
 
   const currentModel = await readCurrentModel(page);
   if (!currentModel.includes('Qwen3.6-Max-Preview')) {
+    await writeLogEntry({
+      event: 'qwen_model_pinning_failed',
+      expectedModel: 'Qwen3.6-Max-Preview',
+      currentModel,
+      attempts: 2
+    }).catch(() => {});
     throw new Error(`Qwen model selection failed. Expected Qwen3.6-Max-Preview but found ${currentModel || 'unknown model'}.`);
   }
 }
@@ -794,6 +1011,12 @@ async function ensureThinkingModeSelected(page) {
 
   const currentMode = await readCurrentThinkingMode(page);
   if (!isThinkingMode(currentMode)) {
+    await writeLogEntry({
+      event: 'qwen_thinking_mode_pinning_failed',
+      expectedMode: 'Denken/Thinking',
+      currentMode,
+      attempts: 3
+    }).catch(() => {});
     throw new Error(`Qwen thinking mode selection failed. Expected Denken/Thinking but found ${currentMode || 'unknown mode'}.`);
   }
 }
@@ -825,12 +1048,36 @@ async function maybeUploadContextAttachments(page, context) {
   const attachments = Array.isArray(context?.attachmentCandidates) ? context.attachmentCandidates.slice(0, 10) : [];
   if (!attachments.length) return { uploaded: false, count: 0 };
 
-  const fileInput = page.locator('#filesUpload').first();
-  if (!(await fileInput.count().catch(() => 0))) return { uploaded: false, count: 0 };
+  const fileInput = await findFileUploadInput(page);
+  if (!fileInput) {
+    await writeLogEntry({
+      event: 'qwen_attachment_upload_skipped',
+      reason: 'file input not found',
+      count: attachments.length
+    }).catch(() => {});
+    return { uploaded: false, count: 0 };
+  }
 
   await fileInput.setInputFiles(attachments.map((file) => file.absolutePath)).catch(() => {});
   await page.waitForTimeout(1000);
   return { uploaded: true, count: attachments.length };
+}
+
+async function findFileUploadInput(page) {
+  const selectors = [
+    '#filesUpload',
+    'input[type="file"]',
+    'input[aria-label*="upload" i]',
+    'input[aria-label*="file" i]',
+    'input[title*="upload" i]'
+  ];
+
+  for (const selector of selectors) {
+    const locator = page.locator(selector).first();
+    if (await locator.count().catch(() => 0)) return locator;
+  }
+
+  return null;
 }
 
 async function findPromptInput(page) {
@@ -852,7 +1099,19 @@ async function findPromptInput(page) {
 }
 
 async function enterPrompt(page, input, prompt) {
-  if (await safeInjectInput(page, input, prompt, { env: process.env })) return;
+  const browserSafePrompt = sanitizePromptForBrowser(prompt);
+  const guardedPrompt = guardPromptLength(browserSafePrompt, { env: process.env });
+  if (guardedPrompt.truncated) {
+    await writeLogEntry({
+      event: 'prompt_truncated',
+      originalLength: guardedPrompt.originalLength,
+      truncatedLength: guardedPrompt.truncatedLength,
+      threshold: guardedPrompt.threshold
+    }).catch(() => {});
+  }
+
+  const safePrompt = guardedPrompt.prompt;
+  if (await safeInjectInput(page, input, safePrompt, { env: process.env })) return;
 
   const isTextField = await input.evaluate((node) => {
     const tag = node.tagName.toLowerCase();
@@ -861,12 +1120,12 @@ async function enterPrompt(page, input, prompt) {
   });
 
   if (isTextField) {
-    await input.fill(prompt);
+    await input.fill(safePrompt);
     return;
   }
 
   await input.click();
-  await input.type(prompt, { delay: 4 });
+  await input.type(safePrompt, { delay: 4 });
 }
 
 async function submitPrompt(page, input, prompt, previousAssistantState = { count: 0, text: '' }) {
@@ -886,6 +1145,11 @@ async function submitPrompt(page, input, prompt, previousAssistantState = { coun
 
   if (await waitForSubmissionKickoff(page, input, prompt, previousAssistantState)) return;
 
+  const rateLimitBody = await readPageBodyText(page);
+  if (looksLikeQwenRateLimit(rateLimitBody)) {
+    throw new Error(`Qwen rate-limit page detected immediately after send: ${summarizeRateLimitMessage(rateLimitBody)}`);
+  }
+
   await page.waitForFunction((selectors) => selectors.some((selector) => Boolean(document.querySelector(selector))), SELECTORS.sendButton, { timeout: 5_000 }).catch(() => {});
   const sendButtons = page.locator('button.send-button');
   if (await sendButtons.count().catch(() => 0)) {
@@ -894,32 +1158,170 @@ async function submitPrompt(page, input, prompt, previousAssistantState = { coun
   }
 }
 
-async function waitForStreamingDone(page, previousAssistantState = { count: 0, text: '' }) {
-  const kickedOff = await page.waitForFunction(({ selectors, previous }) => {
-    return selectors.some((selector) => {
-      const elements = Array.from(document.querySelectorAll(selector));
-      if (!elements.length) return false;
-      const lastText = String(elements.at(-1)?.innerText || '').trim();
-      return elements.length > previous.count || (lastText.length > 0 && lastText !== previous.text);
-    }) || Boolean(document.querySelector('[aria-busy="true"], .loading, .streaming, .typing-indicator, [data-testid="stop-generation"]'));
-  }, {
-    selectors: SELECTORS.assistantOutput,
-    previous: previousAssistantState
-  }, { timeout: 120_000, polling: 1_000 }).then(() => true).catch(() => false);
+async function waitForStreamingDone(page, previousAssistantState = { count: 0, text: '' }, expectedPrompt = '', options = {}) {
+  await page.waitForTimeout(800).catch(() => {});
+  const startedAt = Date.now();
+  const completionTimeoutMs = resolveCompletionTimeoutMs(options.completionTimeoutMs);
 
-  if (!kickedOff) {
-    throw new Error('Timed out waiting for Qwen to start responding.');
+  try {
+    const completionText = await waitForQwenCompletion(page, {
+      timeout: completionTimeoutMs,
+      stabilityMs: 2_500,
+      previousText: previousAssistantState.text,
+      assistantSelector: SELECTORS.assistantOutput
+    });
+
+    const result = {
+      text: String(completionText || '').trim(),
+      timedOut: false,
+      source: 'completion_wait',
+      durationMs: Date.now() - startedAt
+    };
+    const rateLimitBody = await readPageBodyText(page).catch(() => result.text);
+    if (looksLikeQwenRateLimit(rateLimitBody) || looksLikeQwenRateLimit(result.text)) {
+      throw new Error(`Qwen rate-limit page detected after send: ${summarizeRateLimitMessage(rateLimitBody || result.text)}`);
+    }
+    assertCompleteReply(result);
+    updateQwenCompletionMetadata({ status: 'stable', softTimeout: false, source: 'completion_wait', note: '' });
+    return result.text;
+  } catch (error) {
+    const timedOut = isTimeoutLikeError(error);
+    const diagnosticText = await resolveCurrentAssistantText(page, expectedPrompt).catch(() => '');
+    if (looksLikeQwenRateLimit(diagnosticText)) {
+      throw new Error(`Qwen rate-limit page detected after send: ${summarizeRateLimitMessage(diagnosticText)}`);
+    }
+
+    if (timedOut) {
+      const confirmedText = await confirmCompletedReply(page, expectedPrompt, previousAssistantState.text).catch(() => '');
+      if (confirmedText) {
+        updateQwenCompletionMetadata({ status: 'stable', softTimeout: false, source: 'ui_completion_confirmation', note: '' });
+        await writeLogEntry({
+          event: 'qwen_completion_confirmed_after_timeout',
+          stage: 'ui_completion_confirmation',
+          completionStatus: 'stable',
+          extractedLength: confirmedText.length
+        }).catch(() => {});
+        return confirmedText;
+      }
+    }
+
+    updateQwenCompletionMetadata({
+      status: timedOut ? 'soft_timeout' : 'failed',
+      softTimeout: timedOut,
+      source: timedOut ? 'completion_wait' : 'completion_validation',
+      note: String(error?.message || 'Qwen completion validation failed')
+    });
+    await writeLogEntry({
+      event: timedOut ? 'qwen_completion_soft_timeout' : 'qwen_completion_validation_failed',
+      stage: timedOut ? 'completion_wait' : 'completion_validation',
+      completionStatus: timedOut ? 'soft_timeout' : 'fail',
+      note: String(error?.message || 'Qwen completion validation failed'),
+      extractedLength: diagnosticText.length
+    }).catch(() => {});
+    const excerpt = diagnosticText
+      ? ` [excerpt=${summarizeValidationExcerpt(diagnosticText)}]`
+      : '';
+    throw new Error(`${timedOut ? 'Qwen completion wait timed out' : 'Qwen completion validation failed'}: ${String(error?.message || error)}${excerpt}`);
+  }
+}
+
+export function resolveCompletionTimeoutMs(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 30_000) return 120_000;
+  const buffered = parsed - 10_000;
+  return Math.max(120_000, buffered);
+}
+
+export function isUsefulAssistantCompletionText(previousText = '', text = '') {
+  return Boolean(text && String(text).trim()) && String(text).trim() !== String(previousText || '').trim();
+}
+
+async function waitForGenerationComplete(page, previousAssistantState = { count: 0, text: '' }, expectedPrompt = '', timeoutMs = 120_000) {
+  const startedAt = Date.now();
+  let lastState = null;
+  let stableBodyRounds = 0;
+  let lastBodyText = '';
+  let lastOcrAttemptAt = 0;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    lastState = await page.evaluate((previous) => {
+      const isVisible = (node) => {
+        if (!node) return false;
+        const style = window.getComputedStyle(node);
+        if (!style) return false;
+        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && node.getClientRects().length > 0;
+      };
+
+      const input = document.querySelector('textarea.message-input-textarea, textarea:not(.ime-text-area):not([readonly]), [contenteditable="true"], input[type="text"]');
+      const promptReady = Boolean(input) && !input.hasAttribute('disabled') && input.getAttribute('aria-disabled') !== 'true' && !input.hasAttribute('readonly') && input.readOnly !== true;
+      const visibleButtons = Array.from(document.querySelectorAll('button')).filter((button) => isVisible(button));
+      const hasStopButton = visibleButtons.some((button) => /^(stop|stopp)$/iu.test((button.textContent || '').trim()) || /stop-generation/iu.test(button.getAttribute('data-testid') || '') || /stop/iu.test(button.getAttribute('aria-label') || '') || /stop/iu.test(button.getAttribute('title') || ''));
+      const busyNode = Array.from(document.querySelectorAll('[aria-busy="true"], .loading, .streaming, .typing-indicator, [data-testid="stop-generation"]')).some((node) => isVisible(node));
+      const hasCopyButton = visibleButtons.some((button) => /^(copy|kopieren)$/iu.test((button.textContent || '').trim()) || /copy/iu.test(button.getAttribute('data-testid') || '') || /copy/iu.test(button.getAttribute('aria-label') || '') || /copy/iu.test(button.getAttribute('title') || '')) || Array.from(document.querySelectorAll('[data-testid="copy"], button[title*="Copy" i], button[aria-label*="Copy" i]')).some((node) => isVisible(node));
+      const bodyText = String(document.body?.innerText || '');
+      const assistantNodes = Array.from(document.querySelectorAll(SELECTORS.assistantOutput.join(',')));
+      const lastText = String(assistantNodes.at(-1)?.innerText || '').trim();
+      const assistantChanged = assistantNodes.length > previous.count || (lastText.length > 0 && lastText !== previous.text);
+      const responseActionsVisible = visibleButtons.some((button) => /^(thumbs\s*up|thumbs\s*down|share|retry|copy|kopieren)$/iu.test((button.textContent || '').trim()) || /thumbs|share|retry|copy|kopieren|mehr|options|optionen/iu.test(button.getAttribute('aria-label') || '') || /thumbs|share|retry|copy|kopieren|mehr|options|optionen/iu.test(button.getAttribute('title') || ''));
+      return { hasStopButton, busyNode, hasCopyButton, bodyText, assistantChanged, responseActionsVisible, promptReady };
+    }, previousAssistantState).catch(() => ({ hasStopButton: false, busyNode: false, hasCopyButton: false, bodyText: '', assistantChanged: false, responseActionsVisible: false, promptReady: false }));
+
+    if (looksLikeQwenRateLimit(lastState.bodyText)) {
+      throw new Error(`Qwen rate-limit page detected while waiting for generation to complete: ${summarizeRateLimitMessage(lastState.bodyText)}`);
+    }
+
+    const currentBodyText = String(lastState.bodyText || '').replace(/\r/gu, '').trim();
+    if (currentBodyText && currentBodyText === lastBodyText) {
+      stableBodyRounds += 1;
+    } else {
+      stableBodyRounds = 0;
+      lastBodyText = currentBodyText;
+    }
+
+    if (!lastState.hasStopButton && !lastState.busyNode) {
+      const extractedText = extractAssistantTextFromBodyText(lastState.bodyText, expectedPrompt);
+      const usefulText = Boolean(extractedText && extractedText.trim()) && extractedText.trim() !== String(previousAssistantState.text || '').trim();
+
+      if (lastState.promptReady && usefulText) {
+        updateQwenCompletionMetadata({ status: 'stable', softTimeout: false, source: 'prompt_ready', note: '' });
+        return extractedText;
+      }
+      if (lastState.hasCopyButton || lastState.responseActionsVisible || lastState.assistantChanged) {
+        updateQwenCompletionMetadata({ status: 'stable', softTimeout: false, source: 'response_actions', note: '' });
+        return extractedText;
+      }
+      if (stableBodyRounds >= 3) return extractedText;
+    }
+
+    if (Date.now() - startedAt >= 15_000 && Date.now() - lastOcrAttemptAt >= 15_000) {
+      lastOcrAttemptAt = Date.now();
+      const ocrText = await readPageTextViaOcr(page).catch(() => '');
+      if (ocrText) {
+        const extractedText = extractAssistantTextFromBodyText(ocrText, expectedPrompt);
+        if (extractedText) {
+          updateQwenCompletionMetadata({ status: 'stable', softTimeout: false, source: 'ocr', note: 'ocr_fallback' });
+          return extractedText;
+        }
+      }
+    }
+
+    await page.waitForTimeout(1_000);
   }
 
-  await page.waitForTimeout(2_000);
-  await page.waitForFunction(() => {
-    const hasStopButton = Array.from(document.querySelectorAll('button')).some((button) => /^(stop|stopp)$/iu.test((button.textContent || '').trim()) || /stop-generation/iu.test(button.getAttribute('data-testid') || ''));
-    const busyNode = document.querySelector('[aria-busy="true"], .loading, .streaming, .typing-indicator, [data-testid="stop-generation"]');
-    return !hasStopButton && !busyNode;
-  }, { timeout: 300_000, polling: 1_000 });
-
-  await waitForAssistantTextToStabilize(page, previousAssistantState.text);
-  await page.waitForTimeout(1_500);
+  updateQwenCompletionMetadata({
+    status: 'soft_timeout',
+    softTimeout: true,
+    source: 'generation_wait',
+    note: `Timed out waiting for Qwen generation to complete after ${timeoutMs}ms.`
+  });
+  await writeLogEntry({
+    event: 'qwen_completion_soft_timeout',
+    stage: 'generation_wait',
+    completionStatus: 'soft_timeout',
+    timeoutMs
+  }).catch(() => {});
+  console.warn('[browser] Completion wait timed out; extracting current DOM state');
+  return resolveCurrentAssistantText(page, expectedPrompt);
 }
 
 async function waitForPromptReady(page) {
@@ -932,15 +1334,63 @@ async function waitForPromptReady(page) {
   }, { timeout: 30_000, polling: 500 }).catch(() => {});
 }
 
-async function getLastAssistantText(page) {
+async function getLastAssistantText(page, expectedPrompt = '') {
   for (const selector of SELECTORS.assistantOutput) {
     const locator = page.locator(selector).last();
     if (await locator.count().catch(() => 0)) {
       const text = await locator.innerText().catch(() => '');
-      if (text.trim()) return text.trim();
+      const normalized = normalizeRenderedReplyText(text);
+      if (normalized.trim()) return normalized.trim();
     }
   }
-  return '';
+
+  const bodyText = await readPageBodyText(page).catch(() => '');
+  return extractAssistantTextFromBodyText(bodyText, expectedPrompt);
+}
+
+async function resolveCurrentAssistantText(page, expectedPrompt = '') {
+  const text = await getLastAssistantText(page, expectedPrompt).catch(() => '');
+  if (text.trim()) return text.trim();
+  const bodyText = await readPageBodyText(page).catch(() => '');
+  return extractAssistantTextFromBodyText(bodyText, expectedPrompt);
+}
+
+async function confirmCompletedReply(page, expectedPrompt = '', previousText = '') {
+  const uiState = await page.evaluate(() => {
+    const isVisible = (node) => {
+      if (!node) return false;
+      const style = window.getComputedStyle(node);
+      if (!style) return false;
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && node.getClientRects().length > 0;
+    };
+
+    const input = document.querySelector('textarea.message-input-textarea, textarea:not(.ime-text-area):not([readonly]), [contenteditable="true"], input[type="text"]');
+    const promptReady = Boolean(input) && !input.hasAttribute('disabled') && input.getAttribute('aria-disabled') !== 'true' && !input.hasAttribute('readonly') && input.readOnly !== true;
+    const visibleButtons = Array.from(document.querySelectorAll('button')).filter((button) => isVisible(button));
+    const hasStopButton = visibleButtons.some((button) => /^(stop|stopp)$/iu.test((button.textContent || '').trim()) || /stop-generation/iu.test(button.getAttribute('data-testid') || '') || /stop/iu.test(button.getAttribute('aria-label') || '') || /stop/iu.test(button.getAttribute('title') || ''));
+    const busyNode = Array.from(document.querySelectorAll('[aria-busy="true"], .loading, .streaming, .typing-indicator, [data-testid="stop-generation"]')).some((node) => isVisible(node));
+    const hasCopyButton = visibleButtons.some((button) => /^(copy|kopieren)$/iu.test((button.textContent || '').trim()) || /copy/iu.test(button.getAttribute('data-testid') || '') || /copy/iu.test(button.getAttribute('aria-label') || '') || /copy/iu.test(button.getAttribute('title') || ''));
+    const responseActionsVisible = visibleButtons.some((button) => /^(thumbs\s*up|thumbs\s*down|share|retry|copy|kopieren)$/iu.test((button.textContent || '').trim()) || /thumbs|share|retry|copy|kopieren|mehr|options|optionen/iu.test(button.getAttribute('aria-label') || '') || /thumbs|share|retry|copy|kopieren|mehr|options|optionen/iu.test(button.getAttribute('title') || ''));
+    const bodyText = String(document.body?.innerText || '');
+    const thinkingFinished = /habe\s+fertig\s+gedacht|finished\s+thinking/iu.test(bodyText);
+    return { promptReady, hasStopButton, busyNode, hasCopyButton, responseActionsVisible, thinkingFinished, bodyText };
+  }).catch(() => ({ promptReady: false, hasStopButton: false, busyNode: false, hasCopyButton: false, responseActionsVisible: false, thinkingFinished: false, bodyText: '' }));
+
+  if (looksLikeQwenRateLimit(uiState.bodyText)) {
+    throw new Error(`Qwen rate-limit page detected after send: ${summarizeRateLimitMessage(uiState.bodyText)}`);
+  }
+
+  const text = await resolveCurrentAssistantText(page, expectedPrompt).catch(() => '');
+  const usefulText = isUsefulAssistantCompletionText(previousText, text);
+  const completionProven = uiState.promptReady
+    && !uiState.hasStopButton
+    && !uiState.busyNode
+    && (uiState.hasCopyButton || uiState.responseActionsVisible || uiState.thinkingFinished || usefulText);
+  if (!completionProven) return '';
+
+  const result = { text, timedOut: false, source: 'ui_completion_confirmation', durationMs: 0 };
+  assertCompleteReply(result);
+  return result.text;
 }
 
 async function getLastAssistantState(page) {
@@ -954,29 +1404,49 @@ async function getLastAssistantState(page) {
   return { count: 0, text: '' };
 }
 
-async function waitForAssistantTextToStabilize(page, previousText = '') {
+async function waitForAssistantTextToStabilize(page, previousText = '', options = {}) {
+  const timeoutMs = Number(options.timeoutMs || 60_000);
+  const pollMs = Number(options.pollMs || 1_000);
+  const stableRoundsNeeded = Number(options.stableRoundsNeeded || 3);
+  const expectedPrompt = String(options.expectedPrompt || '').trim();
+  const startedAt = Date.now();
   let stableRounds = 0;
   let lastSeen = previousText;
 
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const current = await getLastAssistantText(page).catch(() => '');
+  while (Date.now() - startedAt < timeoutMs) {
+    const current = await getLastAssistantText(page, expectedPrompt).catch(() => '');
     if (!current || current === previousText) {
       stableRounds = 0;
       lastSeen = current || lastSeen;
-      await page.waitForTimeout(750);
+      await page.waitForTimeout(pollMs);
       continue;
     }
 
     if (current === lastSeen) {
       stableRounds += 1;
-      if (stableRounds >= 2) return;
+      if (stableRounds >= stableRoundsNeeded) return current;
     } else {
-      stableRounds = 0;
+      stableRounds = 1;
       lastSeen = current;
     }
 
-    await page.waitForTimeout(750);
+    await page.waitForTimeout(pollMs);
   }
+
+  updateQwenCompletionMetadata({
+    status: 'soft_timeout',
+    softTimeout: true,
+    source: 'assistant_stabilization',
+    note: `Timed out waiting for Qwen assistant text to stabilize after ${timeoutMs}ms.`
+  });
+  await writeLogEntry({
+    event: 'qwen_completion_soft_timeout',
+    stage: 'assistant_stabilization',
+    completionStatus: 'soft_timeout',
+    timeoutMs
+  }).catch(() => {});
+  console.warn('[browser] Assistant text stabilization timed out; extracting current DOM state');
+  return resolveCurrentAssistantText(page, expectedPrompt);
 }
 
 async function waitForSubmissionKickoff(page, input, prompt, previousAssistantState) {
@@ -1017,6 +1487,70 @@ async function readInputValue(input) {
       return '';
     }
   }
+}
+
+async function readPageBodyText(page) {
+  return await page.locator('body').innerText().catch(() => '');
+}
+
+async function readPageTextViaOcr(page) {
+  const screenshotPath = await captureScreenshot(page, 'wait-for-generation-complete-ocr');
+  const output = execFileSync('tesseract', [screenshotPath, 'stdout', '--psm', '11'], { encoding: 'utf8' });
+  return String(output || '').trim();
+}
+
+function normalizeBodyText(text) {
+  return String(text || '').replace(/\r/gu, '').trim();
+}
+
+function extractAssistantTextFromBodyText(bodyText, prompt = '') {
+  const normalizedBody = normalizeBodyText(bodyText);
+  if (!normalizedBody) return '';
+
+  const normalizedPrompt = normalizeBodyText(prompt);
+  if (!normalizedPrompt) return normalizedBody;
+
+  const promptIndex = normalizedBody.lastIndexOf(normalizedPrompt);
+  if (promptIndex < 0) return normalizedBody;
+
+  const afterPrompt = normalizedBody.slice(promptIndex + normalizedPrompt.length).trim();
+  if (!afterPrompt) return normalizedBody;
+
+  return normalizeRenderedReplyText(stripAssistantUiNoise(afterPrompt));
+}
+
+function stripAssistantUiNoise(text) {
+  const lines = String(text || '')
+    .split(/\r?\n/u)
+    .map((line) => line.trimEnd());
+
+  while (lines.length) {
+    const last = lines.at(-1)?.trim() || '';
+    if (!last) {
+      lines.pop();
+      continue;
+    }
+
+    if (/^(copy|kopieren|thumbs up|thumbs down|share|retry|more options|mehr optionen|optionen)$/iu.test(last)) {
+      lines.pop();
+      continue;
+    }
+
+    break;
+  }
+
+  return lines.join('\n').trim();
+}
+
+function summarizeRateLimitMessage(text) {
+  return String(text || '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .slice(0, 240);
+}
+
+function summarizeValidationExcerpt(text) {
+  return JSON.stringify(stripAssistantUiNoise(String(text || '').replace(/\s+/gu, ' ').trim()).slice(0, 200));
 }
 
 async function collectSelectorReport(page) {

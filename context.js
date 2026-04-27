@@ -2,10 +2,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { loadIgnorePatterns, filterPaths } from './ignore-filter.js';
 
+const urlReachabilityCache = new Map();
+
 export async function buildContext({ prompt, projectRoot = process.cwd() }) {
   // Gather only the metadata Qwen needs so prompts stay smaller and easier to reason about.
-  if (!shouldAttachRepoContext(prompt)) {
-    return prompt;
+  const normalizedPrompt = normalizeInboundPrompt(prompt);
+  if (!shouldAttachRepoContext(normalizedPrompt)) {
+    return buildSimpleContext(normalizedPrompt);
   }
 
   const cwd = projectRoot;
@@ -16,15 +19,24 @@ export async function buildContext({ prompt, projectRoot = process.cwd() }) {
   ]);
 
   const ig = loadIgnorePatterns(cwd);
-  const filteredFiles = filterPaths(files, ig).slice(0, 60);
+  const visibleFiles = filterPaths(files, ig);
+  const filteredFiles = visibleFiles.slice(0, 60);
   const gitMeta = await readGitMeta(cwd);
   const repoUrls = buildRepoUrls(gitRemote, gitMeta.head);
   const repoVisibility = await readRepoVisibility(cwd, repoUrls.web);
+  const verifiedRepoUrls = await verifyRepoUrls(repoUrls, repoVisibility);
+  const urlAccessibility = verifiedRepoUrls.web && verifiedRepoUrls.commit ? 'public' : 'local_only';
+  const hasLocalOnlyImages = visibleFiles.some(isImageFile);
   const issueReferences = extractIssueReferences(prompt);
   const capabilityManifest = buildCapabilityManifest(prompt);
-  const fileReferences = buildFileReferences(filteredFiles, prompt, repoVisibility === 'public' ? repoUrls.blobBase : '');
-  const attachmentCandidates = await buildAttachmentCandidates({ cwd, files, prompt, repoVisibility });
-  const references = buildBestPracticeReferences(prompt, pkg, filteredFiles, repoVisibility === 'public' ? repoUrls.web : '', issueReferences);
+  const fileReferences = urlAccessibility === 'public'
+    ? await sanitizeFileReferenceUrls(buildFileReferences(filteredFiles, prompt, repoVisibility === 'public' ? repoUrls.blobBase : ''))
+    : buildFileReferences(filteredFiles, prompt, repoVisibility === 'public' ? repoUrls.blobBase : '').map((entry) => ({ ...entry, url: '' }));
+  const attachmentCandidates = await buildAttachmentCandidates({ cwd, files: visibleFiles, prompt, repoVisibility });
+  const references = urlAccessibility === 'public'
+    ? await filterReachableUrlEntries(buildBestPracticeReferences(prompt, pkg, filteredFiles, repoVisibility === 'public' ? verifiedRepoUrls.web : '', issueReferences))
+    : [];
+  const verifiedIssueReferences = urlAccessibility === 'public' ? await filterReachableUrlEntries(issueReferences) : [];
 
   return {
     prompt,
@@ -32,19 +44,21 @@ export async function buildContext({ prompt, projectRoot = process.cwd() }) {
       cwd,
       remote: gitRemote,
       ...gitMeta,
-      urls: repoUrls,
+      urls: verifiedRepoUrls,
       visibility: repoVisibility
     },
     package: pkg,
     files: filteredFiles,
     fileReferences,
-    issueReferences,
+    issueReferences: verifiedIssueReferences,
     attachmentCandidates,
     capabilityManifest,
     references,
+    urlAccessibility,
     constraints: [
       'Use the provided repo and file URLs when code context matters.',
       'If the target repo is private or inaccessible by URL, use attached local files instead of relying on repo URLs.',
+      ...(hasLocalOnlyImages ? ['Image files are local-only; do not expect Qwen to inspect them directly.'] : []),
       'Prefer official references over guessed behavior.'
     ],
     completionCriteria: [
@@ -59,11 +73,49 @@ export async function buildContext({ prompt, projectRoot = process.cwd() }) {
   };
 }
 
+export function normalizeInboundPrompt(prompt) {
+  const text = String(prompt || '').trim();
+  if (!text) return '';
+
+  const stripped = text.replace(
+    /^(?:>\s*)?(?:\/?)(?:ask[- ]?qwen|coder[- ]?sin[- ]?qwen|qwen)\b[\s:,-]*/iu,
+    ''
+  ).trim();
+
+  return stripped || text;
+}
+
+function buildSimpleContext(prompt) {
+  return {
+    prompt,
+    mode: 'simple',
+    repo: null,
+    package: null,
+    files: [],
+    fileReferences: [],
+    issueReferences: [],
+    attachmentCandidates: [],
+    capabilityManifest: [],
+    references: [],
+    constraints: [
+      'Treat the input as a user request, not a shell command.',
+      'Do not echo the raw CLI invocation back to the user.'
+    ],
+    completionCriteria: [
+      'Answer directly and keep the response useful.'
+    ],
+    rules: [
+      'SIN-Qwen is a relay proxy, not a thinking agent.',
+      'Return production-ready output only.'
+    ]
+  };
+}
+
 function shouldAttachRepoContext(prompt) {
   // Simple chat turns work better when Qwen receives the user's message directly instead of a repo dump.
   const text = String(prompt || '').trim();
   if (!text) return false;
-  const repoKeywords = /(repo|repository|project|code|file|files|bug|fix|implement|implementation|refactor|test|build|package|dependency|dependencies|branch|commit|docs|documentation|agent|opencode|qwen|issue|worker|platform|provider)/iu;
+  const repoKeywords = /(repo|repository|project|projekt|code|codebase|file|files|datei|dateien|bug|fix|fehler|implement|implementation|implementiere|refactor|test|build|package|dependency|dependencies|branch|commit|docs|documentation|doku|dokumentation|agent|opencode|qwen|issue|worker|platform|provider|optimiere|verbessere|behebe|debug|analyse)/iu;
   return repoKeywords.test(text);
 }
 
@@ -158,7 +210,7 @@ async function collectProjectFiles(root) {
         continue;
       }
 
-      if (/\.(?:py|js|mjs|cjs|ts|tsx|json|md|sh|yml|yaml|txt|log|png|jpg|jpeg|webp)$/u.test(entry.name)) {
+      if (/\.(?:py|js|mjs|cjs|ts|tsx|json|md|pdf|sh|yml|yaml|txt|log|png|jpg|jpeg|webp)$/u.test(entry.name)) {
         results.push(relative);
       }
     }
@@ -190,20 +242,105 @@ function normalizeGitRemoteToWebUrl(remote) {
 }
 
 function buildFileReferences(files, prompt, blobBase, limit = 12) {
-  const ranked = rankRelevantFiles(files, prompt).slice(0, limit);
+  const ranked = rankRelevantFiles(files.filter((file) => !isImageFile(file)), prompt).slice(0, limit);
   return ranked.map((file) => ({
     path: file,
     url: blobBase ? `${blobBase}/${file}` : ''
   }));
 }
 
-async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, limit = 10 }) {
-  const forceEvidenceAttachments = /(screenshot|screenshots|image|images|bild|bilder|log|logs|trace|traces|upload|uploads|datei|dateien|attach|attachment|anhang|anhänge)/iu.test(String(prompt || ''));
-  if (repoVisibility === 'public' && !forceEvidenceAttachments) return [];
+export async function verifyUrlReachable(url, timeoutMs = 2000) {
+  const normalizedUrl = String(url || '').trim();
+  if (!/^https?:\/\//iu.test(normalizedUrl)) return false;
 
-  const ranked = rankAttachmentCandidates(files, prompt, forceEvidenceAttachments);
+  if (urlReachabilityCache.has(normalizedUrl)) {
+    return await urlReachabilityCache.get(normalizedUrl);
+  }
+
+  const probePromise = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    if (typeof timeout.unref === 'function') timeout.unref();
+
+    try {
+      const headResponse = await fetch(normalizedUrl, { method: 'HEAD', redirect: 'follow', signal: controller.signal }).catch(() => null);
+      if (isVerifiedPublicResponse(headResponse, normalizedUrl)) return true;
+
+      if (headResponse?.status === 405 || headResponse?.status === 403) {
+        const getResponse = await fetch(normalizedUrl, { method: 'GET', redirect: 'follow', signal: controller.signal }).catch(() => null);
+        return isVerifiedPublicResponse(getResponse, normalizedUrl);
+      }
+
+      return false;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeout);
+    }
+  })();
+
+  urlReachabilityCache.set(normalizedUrl, probePromise);
+  const result = await probePromise;
+  urlReachabilityCache.set(normalizedUrl, Promise.resolve(result));
+  return result;
+}
+
+function isVerifiedPublicResponse(response, fallbackUrl) {
+  if (!response?.ok) return false;
+  const finalUrl = String(response.url || fallbackUrl || '').trim();
+  if (!finalUrl) return false;
+  if (/(?:login|auth|signin|session)/iu.test(finalUrl)) return false;
+  return true;
+}
+
+export async function sanitizeFileReferenceUrls(entries, timeoutMs = 2000) {
+  return await Promise.all((Array.isArray(entries) ? entries : []).map(async (entry) => {
+    if (!entry?.url) return entry;
+    const reachable = await verifyUrlReachable(entry.url, timeoutMs);
+    return reachable ? entry : { ...entry, url: '' };
+  }));
+}
+
+export async function filterReachableUrlEntries(entries, timeoutMs = 2000) {
+  const resolved = await Promise.all((Array.isArray(entries) ? entries : []).map(async (entry) => {
+    if (!entry?.url) return null;
+    return await verifyUrlReachable(entry.url, timeoutMs) ? entry : null;
+  }));
+  return resolved.filter(Boolean);
+}
+
+async function verifyRepoUrls(repoUrls, repoVisibility) {
+  if (repoVisibility !== 'public') {
+    return {
+      ...repoUrls,
+      web: '',
+      tree: '',
+      commit: '',
+      blobBase: ''
+    };
+  }
+
+  const [web, tree, commit] = await Promise.all([
+    verifyUrlReachable(repoUrls.web) ? repoUrls.web : '',
+    verifyUrlReachable(repoUrls.tree) ? repoUrls.tree : '',
+    verifyUrlReachable(repoUrls.commit) ? repoUrls.commit : ''
+  ]);
+
+  return {
+    ...repoUrls,
+    web,
+    tree,
+    commit,
+    blobBase: web ? repoUrls.blobBase : ''
+  };
+}
+
+export async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, limit = 10 }) {
+  const forceEvidenceAttachments = /(screenshot|screenshots|image|images|bild|bilder|log|logs|trace|traces|upload|uploads|datei|dateien|attach|attachment|anhang|anhänge)/iu.test(String(prompt || ''));
+
+  const ranked = rankAttachmentCandidates(files.filter((file) => !isImageFile(file)), prompt, forceEvidenceAttachments);
   const mustInclude = forceEvidenceAttachments
-    ? ranked.filter((file) => /\.(?:log|txt|trace|png|jpg|jpeg|webp)$/u.test(file)).slice(0, Math.min(4, limit))
+    ? ranked.filter((file) => /\.(?:log|txt|trace|pdf)$/u.test(file)).slice(0, Math.min(4, limit))
     : [];
   const rankedSet = new Set(mustInclude);
   const selected = [...mustInclude, ...ranked.filter((file) => !rankedSet.has(file))].slice(0, limit);
@@ -218,7 +355,9 @@ async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, l
         path: relativePath,
         absolutePath,
         size: stat.size,
-        reason: repoVisibility === 'public' ? 'explicit_evidence_attachment' : 'private_repo_context'
+        reason: repoVisibility === 'public'
+          ? (forceEvidenceAttachments ? 'explicit_evidence_attachment' : 'public_repo_code_attachment')
+          : 'private_repo_context'
       });
     } catch {
       // Ignore unreadable files.
@@ -231,7 +370,7 @@ async function buildAttachmentCandidates({ cwd, files, prompt, repoVisibility, l
 function rankAttachmentCandidates(files, prompt, forceEvidenceAttachments) {
   const tokens = tokenizePrompt(prompt);
   return [...files]
-    .filter((file) => forceEvidenceAttachments || !/\.(?:png|jpg|jpeg|webp|txt|log)$/u.test(file))
+    .filter((file) => forceEvidenceAttachments || !/\.(?:png|jpg|jpeg|webp|gif|bmp|tiff|txt|log)$/u.test(file))
     .sort((left, right) => attachmentScore(right, tokens, forceEvidenceAttachments) - attachmentScore(left, tokens, forceEvidenceAttachments) || left.localeCompare(right));
 }
 
@@ -264,12 +403,18 @@ function attachmentScore(file, tokens, forceEvidenceAttachments) {
   let score = scoreFile(file, tokens);
   const lower = file.toLowerCase();
 
+  if (/\.(?:js|mjs|cjs|ts|tsx|jsx|py|go|rs|java|kt|swift|php|rb|json|sh|yml|yaml|toml|css|html|xml)$/u.test(lower)) score += 15;
+  if (/\.md$/u.test(lower)) score += 4;
   if (/\.(?:log|txt|trace)$/u.test(lower)) score += forceEvidenceAttachments ? 80 : 5;
-  if (/\.(?:png|jpg|jpeg|webp)$/u.test(lower)) score += forceEvidenceAttachments ? 70 : 0;
+  if (/\.(?:pdf)$/u.test(lower)) score += forceEvidenceAttachments ? 75 : 10;
   if (/screenshot|screen|trace|error|fail|debug|log|issue/u.test(lower)) score += 20;
   if (/readme|docs|md$/u.test(lower)) score += 8;
   if (/worker|browser|context|config|issue/u.test(lower)) score += 10;
   return score;
+}
+
+function isImageFile(file) {
+  return /\.(?:png|jpg|jpeg|webp|gif|bmp|tiff)$/u.test(String(file || '').toLowerCase());
 }
 
 function extractIssueReferences(prompt) {
@@ -282,6 +427,7 @@ function buildCapabilityManifest(prompt) {
   const items = [
     { name: 'repo_urls', supported: true, reason: 'Public repos can be referenced by repository and file URLs.' },
     { name: 'private_file_attachments', supported: true, reason: 'Private repos can be represented by direct local file attachments.' },
+    { name: 'code_file_attachments', supported: true, reason: 'Relevant source files can be uploaded locally so Qwen can inspect exact implementation details.' },
     { name: 'issue_urls', supported: true, reason: 'GitHub issue URLs can be forwarded when present in the task.' },
     { name: 'screenshots_metadata', supported: true, reason: 'Screenshot and artifact metadata can be included when available.' }
   ];
