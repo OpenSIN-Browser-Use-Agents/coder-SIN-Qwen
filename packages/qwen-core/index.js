@@ -5,3 +5,4 @@ export { APP_NAME, PACKAGE_NAME, getScopedEnv, parseBooleanEnv, parseIntegerEnv,
 export { resolveLogFile, writeLogEntry } from '../../logger.js';
 export { readTraceContext, installTraceContext, tracePayload } from '../../trace.js';
 export { loadIgnorePatterns, filterPaths } from '../../ignore-filter.js';
+export { CircuitBreaker } from './circuit-breaker.js';
