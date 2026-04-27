@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Monorepo scaffold started** — added `pnpm-workspace.yaml`, `turbo.json`, and initial `apps/qwen-connector` / `packages/qwen-core` shells to prepare the issue #25 migration without changing the current relay behavior.
+
 ### Fixed
 
 - **Long-prompt relay failure** — prompts exceeding ~430 characters silently failed with "(no output)" because `page.keyboard.insertText()` bypasses React's synthetic event system. The Qwen textarea never registered the text, so Enter didn't submit. Three-layer fix:

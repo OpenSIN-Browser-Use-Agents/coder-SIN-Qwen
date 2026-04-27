@@ -4,6 +4,12 @@
 
 `coder-SIN-Qwen` is a standalone OpenCode agent repo that relays tasks to Qwen through the local Chrome `Default` profile.
 
+## Workspace scaffold
+
+- `apps/qwen-connector/` — monorepo app wrapper for the CLI entrypoint
+- `packages/qwen-core/` — shared pure helpers for context, prompts, trace, logging, and runtime config
+- `pnpm-workspace.yaml` / `turbo.json` — workspace foundation for the issue #25 migration path
+
 ## Main files
 
 - `index.js` — CLI entrypoint
