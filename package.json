@@ -3,6 +3,7 @@
   "version": "0.3.0",
   "description": "coder-SIN-Qwen: an oh-my-opencode relay proxy for Qwen-driven execution.",
   "type": "module",
+  "packageManager": "pnpm@10.0.0",
   "bin": {
     "ask-qwen": "./index.js"
   },
