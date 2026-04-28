@@ -27,3 +27,4 @@ export { computeDomHash, compareDomHashes } from './lib/dom-hash.js';
 export { getPlaybook, getAllPlaybookNames, inferPlaybookFromError } from './lib/recovery-playbook.js';
 export { SelfHealOrchestrator, createSelfHealOrchestrator } from './lib/self-heal.js';
 export { BrowserState, BrowserEvent, isValidTransition, nextState, BrowserStateMachine, createBrowserStateMachine } from './lib/browser-state-machine.js';
+export { EphemeralProfile, createEphemeralProfile, SessionHealthMonitor, createSessionHealthMonitor } from './lib/ephemeral-profile.js';
