@@ -16,3 +16,4 @@ artifacts/
 coder-sin-qwen-tasks/*.md
 coder-sin-qwen-tasks/*.json
 demo/
+!demo/record-real-demo.sh
