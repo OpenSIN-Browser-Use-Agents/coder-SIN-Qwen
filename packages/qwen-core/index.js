@@ -33,3 +33,4 @@ export { RelevanceScorer, createRelevanceScorer } from './lib/relevance-scorer.j
 export { ContextCompressor, createContextCompressor } from './lib/context-compressor.js';
 export { StructuredLogger, createStructuredLogger, createLogEntry, formatLogEntry, nextStepId, resetStepCounter } from './lib/structured-log.js';
 export { DomSnapshotManager, createDomSnapshotManager } from './lib/dom-snapshot.js';
+export { AsyncEventLoop, createAsyncEventLoop, TaskStatus, ProgressIndicator, createProgressIndicator } from './lib/async-event-loop.js';
