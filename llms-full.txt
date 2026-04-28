@@ -1,0 +1,71 @@
+# coder-SIN-Qwen - Full Context
+
+> Standalone relay proxy that sends project context to Qwen via browser UI automation and returns the answer. No API key needed.
+
+## What It Does
+- Collects local project context (files, git state, dependencies)
+- Sends context to Qwen via automated Chrome browser UI
+- Returns Qwen's answer as plain text or structured JSON
+- Supports multi-turn conversations, conversation trees, account rotation
+- Enterprise-grade: self-healing, state machine, secret management, observability
+
+## Quick Start
+```bash
+git clone https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen.git
+cd coder-SIN-Qwen
+pnpm install
+node ./index.js "Review this repo"
+```
+
+## Architecture
+- CLI Entrypoint: index.js
+- Core Library: packages/qwen-core/ (21+ modules)
+- Browser: Playwright + Chrome CDP sidecar attach
+- Auth: Direct email/password login with account rotation
+- Secrets: Zero-trust SecretClient (Infisical + env fallback)
+- State: 9-state BrowserStateMachine with event-driven sync
+- Self-Healing: 6 recovery playbooks for known error scenarios
+- Storage: Local JSON file for conversation trees + consult memory
+- CI/CD: pnpm + Turborepo with concurrency grouping
+
+## Key Modules (packages/qwen-core/)
+- context.js - Context collection and URL accessibility checks
+- prompt-builder.js - Structured prompt construction
+- browser-hardening.js - Safe prompt injection and DOM interaction
+- validator.js - Response validation and fluff stripping
+- lifecycle.js - Resource tracking and cleanup
+- trace.js - Run/trace/span correlation
+- conversation-tree.js - Persistent branching store
+- secrets-check.js - Secret presence validation
+- lib/secret-client.js - Zero-trust secret management
+- lib/selector-chain.js - Multi-strategy DOM selector resolution
+- lib/browser-state-machine.js - 9-state browser FSM
+- lib/self-heal.js - Recovery playbook orchestrator
+- lib/dom-hash.js - DOM drift detection
+- lib/recovery-playbook.js - 6 playbooks for error scenarios
+- lib/context-compressor.js - Token budget + relevance scoring
+- lib/token-budget.js - Per-category budget allocation
+- lib/relevance-scorer.js - TF-IDF cosine similarity
+- lib/structured-log.js - Canonical log entry schema
+- lib/dom-snapshot.js - HTML snapshot with rotation
+- lib/async-event-loop.js - Task queue with timeout
+- lib/ephemeral-profile.js - Temp Chrome profile management
+- lib/attachment-hardening.js - File size/MIME validation
+- lib/prompt-guard.js - Prompt length enforcement
+- lib/wait-for-completion.js - Completion stability detection
+- lib/cdp-probe.js - CDP endpoint health check
+- lib/memory-writer.js - Atomic JSON file writes
+- lib/git-prepare.js - Commit preparation
+
+## Test Suite
+- 200+ tests across 20+ test files
+- Property-based tests (fast-check): invariants for all core modules
+- Integration tests: module interaction verification
+- Unit tests: individual function coverage
+- Coverage available via: pnpm run coverage
+
+## Links
+- GitHub: https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen
+- Issues: https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/issues
+- License: https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/blob/main/LICENSE
+- OpenSIN-AI: https://opensin.ai

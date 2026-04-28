@@ -1,0 +1,17 @@
+# coder-SIN-Qwen
+
+> Standalone relay proxy that sends project context to Qwen via browser UI automation and returns the answer.
+
+## Documentation
+- [README](https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/blob/main/README.md) - Quick start, features, architecture
+- [Architecture](https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/blob/main/docs/architecture.md) - Detailed system design
+- [Contributing](https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/blob/main/CONTRIBUTING.md) - How to contribute
+- [Changelog](https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/blob/main/CHANGELOG.md) - Version history
+- [Code of Conduct](https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/blob/main/CODE_OF_CONDUCT.md)
+
+## Key Information
+- License: MIT
+- Language: JavaScript (Node.js 20+)
+- Package Manager: pnpm
+- Protocol: Browser CDP Automation
+- Repo: https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen

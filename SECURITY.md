@@ -1,18 +1,29 @@
-# Security
+# Security Policy
 
-## Secret handling
+## Reporting a Vulnerability
 
-- Do not commit secrets, tokens, cookies, or profile data.
-- Do not auto-upload secrets to any third-party service without explicit approval.
-- Use environment variables for local development.
-- If your org uses a secret manager, integrate it deliberately and document the fields one by one.
-- `GH_TOKEN` and any Infisical credentials should be stored in an approved secret manager, not in shell history.
+If you discover a security vulnerability, please:
 
-## Browser profile safety
+1. **DO NOT** open a public issue
+2. Email us at: security@opensin.ai
+3. Include:
+   - Description of the vulnerability
+   - Steps to reproduce
+   - Potential impact
+   - Suggested fix (if any)
 
-- `CHROME_PROFILE` points at a local Chrome `Default` profile.
-- Keep that directory private and off shared machines.
+We will respond within 48 hours and work with you to resolve the issue.
 
-## Reporting
+## Security Best Practices
 
-If the Qwen UI changes or login breaks, treat it as a security-sensitive automation failure and re-verify manually.
+- Never commit secrets or API keys to the repository
+- Use environment variables or Infisical for all credentials
+- The SecretClient (`packages/qwen-core/lib/secret-client.js`) never logs secret values
+- Review all PRs for security implications
+- Keep dependencies updated via Dependabot
+
+## Supported Versions
+
+| Version | Supported |
+|:---|:---|
+| 0.x.x | ✅ |

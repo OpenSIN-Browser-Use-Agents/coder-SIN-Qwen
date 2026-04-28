@@ -1,370 +1,439 @@
-# coder-SIN-Qwen
+<a name="readme-top"></a>
 
-coder-SIN-Qwen is a **standalone relay proxy repo** for OpenCode-style execution.
+<p align="center">
+  <img src="https://img.shields.io/badge/coder--SIN--Qwen-🤖_Relay_Proxy-7B3FE4?style=for-the-badge" alt="coder-SIN-Qwen" width="480" />
+</p>
 
-It does not “think” for you. It:
+<p align="center">
+  <a href="https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" />
+  </a>
+  <a href="https://nodejs.org/">
+    <img src="https://img.shields.io/badge/node.js-20+-339933?logo=node.js&logoColor=white" alt="Node.js" />
+  </a>
+  <a href="https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/ci.yml?label=CI&logo=github" alt="CI" />
+  </a>
+  <a href="https://qwen.ai">
+    <img src="https://img.shields.io/badge/Qwen-UI_Automation-068A0A?logo=quora&logoColor=white" alt="Qwen" />
+  </a>
+  <a href="https://opensin.ai">
+    <img src="https://img.shields.io/badge/OpenSIN--AI-Agent_Fleet-7B3FE4?logo=github&logoColor=white" alt="OpenSIN-AI" />
+  </a>
+</p>
 
-1. collects local project context,
-2. sends it to Qwen in the browser,
-3. waits for the answer,
-4. returns the plain Qwen answer by default.
+<p align="center">
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#cli-commands">Commands</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#contributing">Contributing</a>
+</p>
 
-If you explicitly need machine-readable output, use `--json` so the repo prints the parsed payload instead.
-For richer Qwen back-and-forth, the relay can take one short follow-up turn when the answer clearly suggests a useful next step.
-It can also persist a local conversation tree so later runs can branch from any earlier node instead of only continuing linearly.
+---
 
-## Files
+> **Ask Qwen anything about your code — without leaving your terminal.**
+> coder-SIN-Qwen is a standalone relay proxy that collects local project context, sends it to Qwen via browser UI automation, and returns the answer. No API key needed — just Chrome and a Qwen account.
 
-- `index.js` — CLI entrypoint
-- `browser.js` — browser/session adapter
-- `preflight.js` — dependency and environment gate
-- `modul-qwen-autotraining.js` — Qwen-first self-improvement snapshot/suggestion engine
-- `cli-autotraining.js` — CLI entrypoint for autotraining runs
-- `push-secrets.js` — Infisical push helper
-- `git.js` — optional snapshot helper
-- `smoke.js` — readiness check
-- `restore.js` — rollback helper
-- `public-task-file.js` — temporary task packet writer and optional public gist publisher
-- `scripts/merge-main.sh` — guarded GitHub merge helper
-- `INDEX.md` — repo map
-- `INSTALL.md` — setup guide
-- `OPS.md` — operations and rollback notes
-- `coder-sin-qwen-tasks/` — runtime workspace for generated task packets
-- `.nvmrc` / `.npmrc` — runtime guardrails
+---
 
-## Workspace scaffold
+## Quick Start
 
-All shared modules live in the monorepo package:
+<table>
+<tr>
+<td width="33%" align="center">
+<strong>1. Clone</strong><br/><br/>
+<code>git clone https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen.git</code><br/><br/>
+<img src="https://img.shields.io/badge/⏱️_30s-blue?style=flat" />
+</td>
+<td width="33%" align="center">
+<strong>2. Install</strong><br/><br/>
+<code>pnpm install</code><br/><br/>
+<img src="https://img.shields.io/badge/⏱️_30s-blue?style=flat" />
+</td>
+<td width="33%" align="center">
+<strong>3. Ask Qwen</strong><br/><br/>
+<code>node ./index.js "Review this repo"</code><br/><br/>
+<img src="https://img.shields.io/badge/⏱️_Go!-green?style=flat" />
+</td>
+</tr>
+</table>
 
-- `apps/qwen-connector/` — CLI package wrapper
-- `packages/qwen-core/` — shared helpers: context, prompts, trace, logging, runtime config, parser, validator, lifecycle, conversation tree, secrets, consult memory
-- `packages/qwen-core/lib/` — internal utilities: memory-writer, prompt-guard, wait-for-completion, cdp-probe, conversation-tree-cli, git-prepare
-- `pnpm-workspace.yaml` / `turbo.json` / `pnpm-lock.yaml` — workspace, task-graph, and lockfile foundation
+> [!TIP]
+> No API key needed. Requires Chrome + Qwen account. Set `CHROME_CDP_URL` or let the sidecar handle it.
 
-## Usage
+---
 
-```bash
-node ./index.js "Review the repo and propose the next implementation step"
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph CLI["CLI Layer"]
+        direction LR
+        CLI["index.js<br/>CLI Entrypoint"]
+        PRE["preflight.js<br/>Env & Dep Checks"]
+        SMOKE["smoke.js<br/>Readiness Check"]
+    end
+
+    subgraph Core["packages/qwen-core"]
+        direction LR
+        CTX["context.js<br/>Context Collector"]
+        PB["prompt-builder.js<br/>Prompt Shaping"]
+        VAL["validator.js<br/>Response Validator"]
+        BR["browser-hardening.js<br/>UI Hardening"]
+        LC["lifecycle.js<br/>Resource Manager"]
+        TR["trace.js<br/>Observability"]
+        CONV["conversation-tree.js<br/>Branching Store"]
+    end
+
+    subgraph Lib["packages/qwen-core/lib"]
+        direction LR
+        SC["secret-client.js<br/>Zero-Trust Secrets"]
+        SM["browser-state-machine.js<br/>9-State Machine"]
+        SH["self-heal.js<br/>Recovery Playbooks"]
+        CR["context-compressor.js<br/>Token Budget"]
+        EL["async-event-loop.js<br/>Task Queue"]
+        SL["structured-log.js<br/>Observability 2.0"]
+    end
+
+    subgraph Browser["Browser Automation"]
+        B["browser.js<br/>Playwright Session"]
+        CDP["CDP Sidecar<br/>Chrome Debug"]
+        Q["chat.qwen.ai<br/>Qwen UI"]
+    end
+
+    CLI --> Core
+    Core --> Lib
+    Core --> B
+    B --> CDP
+    CDP --> Q
+
+    classDef cliClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef coreClass fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+    classDef libClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef browserClass fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+
+    class CLI,PRE,SMOKE cliClass
+    class CTX,PB,VAL,BR,LC,TR,CONV coreClass
+    class SC,SM,SH,CR,EL,SL libClass
+    class B,CDP,Q browserClass
 ```
 
-Machine-readable output:
+<p align="center">
+  <sub>Full architecture details in <a href="docs/architecture.md">docs/architecture.md</a></sub>
+</p>
+
+---
+
+## Features
+
+| Capability | Description | Status |
+|:---|:---|:---:|
+| **Qwen Relay** | Send code context to Qwen via browser UI automation | ✅ |
+| **Zero API Keys** | No API key needed — uses real Qwen web UI | ✅ |
+| **Conversation Tree** | Persistent branching, `--branch`/`--tree`/`--checkout` | ✅ |
+| **Account Rotation** | 3+ Qwen accounts with cooldown + circuit breaker | ✅ |
+| **Self-Healing** | DOM drift detection, recovery playbooks, 6 error scenarios | ✅ |
+| **State Machine** | 9-state browser lifecycle with event-driven sync | ✅ |
+| **SecretClient** | Zero-trust secret management, never logs values | ✅ |
+| **Context Compression** | Token budget manager + relevance scoring (TF-IDF) | ✅ |
+| **Observability 2.0** | Structured logging with step IDs, DOM snapshots | ✅ |
+| **Async CLI** | Task queue with timeout, progress spinner | ✅ |
+| **Attachment Hardening** | Size validation, MIME checks, upload retry | ✅ |
+| **Test Pyramid** | 200+ tests, property-based + integration + unit | ✅ |
+| **TypeScript Ready** | `tsconfig.json` with strict mode, 0 type errors | ✅ |
+| **ADRs** | 5 architecture decision records in `docs/adr/` | ✅ |
+
+---
+
+## Use Cases
+
+| Who | Problem | Solution |
+|:---|:---|:---|
+| **Developer** | Need code review but no API budget | Relay context to Qwen's free UI |
+| **OpenCode Agent** | Needs Qwen consultation mid-task | `/ask-qwen` command → structured reply |
+| **DevOps** | Automate code analysis in CI | `--json` mode for machine-readable output |
+| **Researcher** | Compare model outputs iteratively | Conversation tree with branching |
+| **Team Lead** | Audit code quality at scale | Autotraining snapshots + trace correlation |
+
+---
+
+## CLI Commands
+
+<details>
+<summary>🔍 Ask Qwen (Core Relay)</summary>
 
 ```bash
-node ./index.js --json "Review the repo and propose the next implementation step"
+# Basic prompt
+node ./index.js "Review the error handling in this repo"
+
+# Machine-readable JSON output
+node ./index.js --json "List all exported functions"
+
+# Multi-turn conversation
+node ./index.js --turns 2 "Design the next feature"
+
+# Dry-run (no browser)
+node ./index.js --dry-run "What context would you send?"
 ```
+</details>
 
-Autotraining cycle:
-
-```bash
-node ./cli-autotraining.js "Design the next coder-SIN-Qwen improvement"
-```
-
-Optional snapshot before run:
+<details>
+<summary>🌳 Conversation Tree</summary>
 
 ```bash
-node ./index.js --snapshot "Review the repo and propose the next implementation step"
-```
-
-Conversation tree branch from a previous node:
-
-```bash
-node ./index.js --branch <node-id> "Refine this branch"
-```
-
-Print the current conversation tree:
-
-```bash
+# Print current tree
 node ./index.js --tree
-```
 
-Highlight one existing branch while printing the tree:
+# Branch from specific node
+node ./index.js --branch <node-id> "Refine this branch"
 
-```bash
-node ./index.js --tree --branch <node-id>
-```
-
-Persistently switch the local active branch:
-
-```bash
+# Switch active branch
 node ./index.js --checkout <node-id>
 node ./index.js --checkout latest
 node ./index.js --checkout none
-```
 
-Prepare a commit without creating one:
-
-```bash
-node ./index.js --prepare-commit
+# Prepare commit (dry-run)
 node ./index.js --prepare-commit --dry-run
 ```
+</details>
 
-Dry run:
-
-```bash
-node ./index.js --dry-run "Review the repo and propose the next implementation step"
-```
-
-Preflight:
+<details>
+<summary>🧪 Validation & Smoke</summary>
 
 ```bash
-node ./index.js --preflight
-```
-
-Live smoke:
-
-```bash
-node ./index.js --smoke-live
-```
-
-If Chrome already has the `Default` profile open, close those windows first.
-
-## Verify after writes
-
-```bash
-bash ./scripts/after-write.sh
-```
-
-This runs `pnpm install` and then `pnpm run build`.
-
-Recommended reliable verification:
-
-```bash
-node ./verify.js
-```
-
-or:
-
-```bash
-pnpm run verify
-```
-
-## Testing
-
-```bash
+# Full test suite
 pnpm test
-```
 
-Preflight and smoke:
+# Preflight checks
+node ./preflight.js
 
-```bash
-pnpm run preflight
+# Smoke tests
 pnpm run smoke
 pnpm run smoke:live
+
+# Coverage report
+pnpm run coverage
+```
+</details>
+
+<details>
+<summary>🔐 Secrets & Auth</summary>
+
+```bash
+# Validate secrets
+pnpm run secrets:check
+
+# Pull from Infisical
+pnpm run secrets:pull
+
+# Push to Infisical
+pnpm run secrets:push
+
+# CDP sidecar
+pnpm run cdp:start
 pnpm run cdp:status
 ```
+</details>
 
-Live-run preparation:
+<details>
+<summary>🔄 Release & Merge</summary>
 
 ```bash
-pnpm run live:prepare
+# Merge to main (requires ALLOW_GH_MERGE=1)
+pnpm run merge:main
+
+# Release
+pnpm run release:patch
+pnpm run release:minor
+pnpm run release:major
+
+# Verify after changes
+node ./verify.js
+```
+</details>
+
+---
+
+## Project Structure
+
+```
+coder-SIN-Qwen/
+├── index.js                    # CLI Entrypoint
+├── browser.js                  # Playwright browser session
+├── preflight.js                # Env & dependency gate
+├── cli-autotraining.js         # Self-improvement engine
+├── push-secrets.js             # Infisical push helper
+├── verify.js                   # Install/test/build gate
+├── smoke.js                    # Readiness check
+├── restore.js                  # Rollback helper
+├── packages/
+│   └── qwen-core/              # 📦 Shared library (21+ modules)
+│       ├── index.js            # Barrel exports
+│       ├── context.js          # Context collector
+│       ├── prompt-builder.js   # Prompt shaping
+│       ├── validator.js        # Response validator
+│       ├── lifecycle.js        # Resource cleanup
+│       ├── trace.js            # Observability
+│       ├── conversation-tree.js # Branching store
+│       ├── secret-schema.js    # Secret schema
+│       └── lib/                # Internal utilities
+│           ├── secret-client.js    # SecretClient
+│           ├── selector-chain.js   # DOM selector engine
+│           ├── browser-state-machine.js  # 9-state FSM
+│           ├── self-heal.js         # Recovery playbooks
+│           ├── dom-hash.js          # DOM drift detection
+│           ├── context-compressor.js # Token budgeting
+│           ├── structured-log.js    # Observability 2.0
+│           ├── async-event-loop.js  # Task queue
+│           ├── ephemeral-profile.js # Session isolation
+│           └── attachment-hardening.js # File validation
+├── apps/qwen-connector/        # CLI package wrapper
+├── test/                       # 200+ tests
+├── docs/
+│   ├── adr/                    # 5 ADRs
+│   └── architecture.md         # Full design docs
+├── plans/                      # 14 implementation plans
+├── scripts/                    # Shell helpers
+├── .github/workflows/ci.yml    # CI pipeline
+├── Dockerfile                  # Container support
+├── docker-compose.yml          # Dev environment
+├── tsconfig.json               # TypeScript config
+├── pnpm-lock.yaml              # Lockfile
+└── turbo.json                  # Task orchestration
 ```
 
-Use the dedicated non-destructive sidecar path; the relay prepares it and attaches by CDP:
+---
+
+## Configuration
+
+<details>
+<summary>📋 Environment Variables</summary>
+
+| Variable | Default | Description |
+|:---|:---|:---|
+| `QWEN_URL` | `https://chat.qwen.ai` | Qwen chat URL |
+| `QWEN_AUTH_METHOD` | `email_password` | Auth mode (locked) |
+| `CHROME_CDP_URL` | — | CDP endpoint for attach mode |
+| `CHROME_REMOTE_DEBUGGING_PORT` | `9444` | Sidecar CDP port |
+| `CHROME_PROFILE` | — | Chrome profile path |
+| `QWEN_ACCOUNT_ORDER` | — | Account rotation order |
+| `QWEN_ACCOUNT_1_EMAIL` | — | Account 1 email |
+| `QWEN_ACCOUNT_1_PASSWORD` | — | Account 1 password |
+| `SIN_CODER_QWEN_DRY_RUN` | `0` | Skip browser automation |
+| `SIN_CODER_QWEN_LOG_FILE` | — | JSONL log path |
+| `SIN_CODER_QWEN_ARTIFACT_DIR` | `artifacts/` | Screenshot output |
+| `SIN_CODER_QWEN_MAX_PROMPT_LENGTH` | `12000` | Max prompt chars |
+| `SIN_CODER_QWEN_SESSION_TIMEOUT_MS` | — | Browser timeout |
+| `INFISICAL_PROJECT_ID` | — | Infisical project ID |
+| `GH_TOKEN` | — | GitHub token |
+
+</details>
+
+<details>
+<summary>📁 Key Files</summary>
+
+| File | Purpose |
+|:---|:---|
+| `.qwenignore` | Token-saving context filter |
+| `.coder-sin-qwen-memory.json` | Consult memory store |
+| `.coder-sin-qwen-conversations.json` | Conversation tree store |
+| `secrets.required.json` | Secret validation spec |
+| `coder-sin-qwen-tasks/` | Task packet workspace |
+
+</details>
+
+---
+
+## Browser Setup
+
+The relay uses **sidecar CDP attach** as the only supported browser path:
 
 ```bash
+# Start the CDP sidecar
 export CHROME_REMOTE_DEBUGGING_PORT="9444"
 pnpm run cdp:start
 export CHROME_CDP_URL="http://127.0.0.1:9444"
+
+# Run with live browser
+node ./index.js --smoke-live
 ```
 
-The sidecar now launches the Chrome binary directly, seeds the cloned profile's startup URLs, suppresses crash-restore and search-engine-choice prompts, and opens the Qwen chat URL directly.
-The auth flow clicks the Qwen sign-in entry when needed, uses direct email/password login, and waits for a real assistant reply before returning.
-Live smoke checks now reuse the same recovery path as normal runs, so `--smoke-live` can validate the authenticated sidecar/attach flow instead of failing on a locked Default profile.
+> [!IMPORTANT]
+> No direct browser launches. The sidecar attaches to your Chrome via CDP. Close other Chrome instances first to avoid profile locks.
 
-By default the sidecar uses **no profile sync** for the fastest and least fragile recovery path. Set `CHROME_SIDECAR_SYNC_MODE=minimal` or `CHROME_SIDECAR_SYNC_MODE=full` only if you explicitly need copied profile state.
+---
 
-The shared launcher prepares only the sidecar CDP endpoint on `9444` (or your configured `CHROME_REMOTE_DEBUGGING_PORT`). If that recovery path cannot produce a live CDP endpoint within the bounded startup window, the relay fails fast with a clear message instead of silently falling back to a broken startup method.
+## OpenCode Integration
 
-## Browser setup
+```json
+// .opencode/opencode.json
+{
+  "commands": {
+    "ask-qwen": {
+      "command": "node ./index.js --turns 1 --json \"$ARGUMENTS\""
+    }
+  }
+}
+```
 
-The browser flow is strict UI-only and uses your local Chrome `Default` profile.
-Node.js 20 is the supported runtime floor for this repo.
-To enable real Qwen submission with Playwright:
+Run `/ask-qwen` from any OpenCode session to consult Qwen without leaving your workflow.
+
+---
+
+## Development
 
 ```bash
-pnpm add -D playwright
-pnpm dlx playwright install chromium
+# Install
+pnpm install
+
+# Run tests
+pnpm test
+
+# TypeScript check
+pnpm run typecheck
+
+# Coverage
+pnpm run coverage
+
+# Build
+pnpm run build
+
+# Full verification
+node ./verify.js
 ```
 
-Then optionally point the script at an authenticated Chrome profile:
+---
 
-```bash
-export CHROME_PROFILE="$HOME/Library/Application Support/Google/Chrome/Default"
-```
+## Contributing
 
-If needed, you can also provide the Chrome user-data root plus a separate profile name:
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/amazing`)
+3. Run tests (`pnpm test`)
+4. Commit (`git commit -m 'feat: add amazing feature'`)
+5. Push (`git push origin feature/amazing`)
+6. Open a Pull Request
 
-```bash
-export CHROME_PROFILE="$HOME/Library/Application Support/Google/Chrome"
-export CHROME_PROFILE_DIRECTORY="Default"
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
-The only allowed browser path is the fallback sidecar CDP attach. The relay sets `CHROME_ATTACH_MODE=1` and `CHROME_CDP_URL` internally during preparation:
+---
 
-```bash
-export CHROME_REMOTE_DEBUGGING_PORT="9444"
-```
+## License
 
-Attach mode keeps the browser alive and does not auto-close the attached tab afterward.
-When attach mode is active, the relay probes `/json/version` before skipping the cloned sidecar profile check, logs `attach_mode_skip_sidecar_profile_check`, and fails fast if the endpoint is stale.
+Distributed under the **MIT License**. See [LICENSE](LICENSE) for more information.
 
-If the recovered session lands on the Qwen auth page, the relay uses direct email/password login with Infisical-backed Qwen accounts only.
+---
 
-## CI / release
+<p align="center">
+  <a href="https://opensin.ai">
+    <img src="https://img.shields.io/badge/🤖_Powered_by-OpenSIN--AI-7B3FE4?style=for-the-badge&logo=github&logoColor=white" alt="Powered by OpenSIN-AI" />
+  </a>
+</p>
 
-- CI runs `npm test` and `pnpm run build`
-- release versions use semver via `pnpm run release:patch|minor|major`
-- after version bumps, create a Git tag and push it to publish a release
+<p align="center">
+  <sub>Entwickelt vom <a href="https://opensin.ai"><strong>OpenSIN-AI</strong></a> Ökosystem – Enterprise AI Agents die autonom arbeiten.</sub><br/>
+  <sub>🌐 <a href="https://opensin.ai">opensin.ai</a> · 💬 <a href="https://opensin.ai/agents">Alle Agenten</a> · 🚀 <a href="https://opensin.ai/dashboard">Dashboard</a></sub>
+</p>
 
-## Environment
-
-- `QWEN_AUTH_METHOD` — locked to `email_password` by runtime validation
-- `SIN_CODER_QWEN_SESSION_TIMEOUT_MS` — hard timeout for one Qwen browser session
-- `QWEN_RATE_LIMIT_COOLDOWN_HOURS` — cooldown window after a rate-limit hit
-- `QWEN_RATE_LIMIT_FAILURE_THRESHOLD` — number of consecutive rate-limit hits before the circuit breaker opens
-- `QWEN_RATE_LIMIT_CIRCUIT_BREAKER_MINUTES` — how long the circuit breaker stays open
-- `QWEN_URL` — defaults to `https://chat.qwen.ai`
-- `QWEN_ACCOUNT_ORDER` — preferred account order for fallback login (for example `2,3,1`)
-- `QWEN_ACCOUNT_STATE_FILE` — non-secret cooldown state file for account rotation (defaults to `artifacts/qwen-account-state.json`)
-- `QWEN_ACCOUNT_1_EMAIL` / `QWEN_ACCOUNT_1_PASSWORD` — direct login credentials for account 1
-- `QWEN_ACCOUNT_2_EMAIL` / `QWEN_ACCOUNT_2_PASSWORD` — direct login credentials for account 2
-- `QWEN_ACCOUNT_3_EMAIL` / `QWEN_ACCOUNT_3_PASSWORD` — direct login credentials for account 3
-- `CHROME_PROFILE` — Chrome profile folder for authenticated browser runs
-- `CHROME_PROFILE_DIRECTORY` — explicit Chrome profile name when `CHROME_PROFILE` points at the user-data root
-- `CHROME_CDP_URL` — attach to an already-running Chrome debug endpoint
-- `CHROME_REMOTE_DEBUGGING_PORT` — shorthand for a local CDP endpoint
-- `SIN_CODER_QWEN_DRY_RUN=1` — skip browser automation and print payload only
-- `--json` — print the parsed machine-readable payload instead of raw Qwen text
-- `SIN_CODER_QWEN_LOG_FILE` — JSONL log destination
-- `SIN_CODER_QWEN_ARTIFACT_DIR` — screenshot output directory
-- `SIN_CODER_QWEN_MEMORY_FILE` — persistent consult memory file (defaults to `.coder-sin-qwen-memory.json`)
-- `SIN_CODER_QWEN_CONVERSATION_FILE` — local conversation-tree store (defaults to `.coder-sin-qwen-conversations.json`)
-- `SIN_CODER_QWEN_MAX_PROMPT_LENGTH` — browser-input ceiling before the relay truncates oversized prompts with a marker (defaults to `12000`)
-- `SIN_CODER_QWEN_AUTOTRAINING_FILE` — JSONL file for autotraining snapshots/suggestions
-- `SIN_CODER_QWEN_RUN_ID` / `SIN_CODER_QWEN_TRACE_ID` / `SIN_CODER_QWEN_SPAN_ID` / `SIN_CODER_QWEN_PARENT_SPAN_ID` / `SIN_CODER_QWEN_SESSION_ID` — trace and chat-session correlation fields written into logs, snapshots, and browser tab binding
-- `SIN_CODER_QWEN_PUBLIC_TASK_FILE` — `auto` (default), `always`, or `off` for temporary public Markdown task packets
-- `INFISICAL_ENV_NAME` — Infisical environment slug for sync commands
-- `INFISICAL_SECRET_PATH` — Infisical folder path for sync commands
-- `INFISICAL_PROJECT_ID` — Infisical project id for non-interactive pull/push flows
-- `SIN_CODER_QWEN_SMOKE_LIVE=1` — run a real browser smoke proof
-- `SIN_CODER_QWEN_REQUIRE_PROFILE=1` — force preflight to fail when the Chrome profile is missing
-- `.qwenignore` — preferred token-saving context filter
-- `--snapshot` — create a Git snapshot before the Qwen run
-
-Runtime validation rejects unsupported auth modes and invalid timeout/port values before the browser starts.
-Rate-limit failures are tracked in `QWEN_ACCOUNT_STATE_FILE`; once the threshold is reached, the circuit breaker pauses account rotation until the cooldown expires.
-Trace fields are injected automatically so JSONL logs, smoke output, consult memory, and autotraining snapshots can be correlated across a single run.
-Consult memory writes now use an atomic temp+rename path so `.coder-sin-qwen-memory.json` is not left half-written on abrupt exits.
-Simple prompts now get normalized into a structured task message instead of being forwarded verbatim.
-Wrapper prefixes like `/ask-qwen` are stripped before Qwen sees the prompt.
-CDP attach now forces `PW_CHROMIUM_DISABLE_DOWNLOAD_BEHAVIOR=1` so Playwright can connect without the Browser.setDownloadBehavior error.
-CDP endpoint probes now go through one bounded helper with abort-based timeouts so stale debug ports fail fast instead of hanging the relay.
-The relay now waits for a stable non-empty assistant answer before it reasserts model settings or finishes the turn.
-If completion stability times out or the extracted text looks truncated/broken, the run now fails closed instead of returning partial DOM/OCR fallback output.
-The browser input boundary now strips `/ask-qwen`, rejects CLI artifacts, and truncates oversized prompts with a structured `prompt_truncated` log event before typing into Qwen.
-Conversation-tree branching is fully local and file-backed; branch history is expanded into prompt context before the browser send step, while the browser/session lifecycle itself stays unchanged.
-Tree rendering now marks the active branch path and latest node explicitly, and `--json` responses include the active path plus flattened role history for the stored conversation branch.
-`--checkout` persists a local active node so future runs can continue from that branch without repeating `--branch`, and `--prepare-commit` stages changes plus prints a diff summary without creating a commit.
-
-## OpenCode
-
-Run `/ask-qwen` from OpenCode through the repo-local `./.opencode/opencode.json` command template.
-See `INSTALL.md` for the full setup.
-
-The global OpenCode config exposes the canonical `/ask-qwen` command, which calls `node ./index.js` directly. The repo-local config follows that same direct-CLI path instead of relying on a shell wrapper.
-The shared global launcher now prepares the reachable local sidecar CDP endpoint before browser work begins, which avoids Chrome profile-lock failures when your main browser is already running.
-
-OpenCode can also expose `coder-SIN-Qwen` as a selectable agent. That agent is meant to consult Qwen first, keep only the useful best-practice suggestions, and then continue the local task without blindly following extra fluff.
-
-The live browser path now auto-selects `Qwen3.6-Max-Preview` before chatting.
-It also re-asserts `Qwen3.6-Max-Preview` after each completed turn so the active chat stays pinned to the intended model.
-Before each send it also enforces the Qwen thinking selector onto `Denken` / `Thinking`.
-Prompt entry now prefers keyboard-safe injection and falls back to a faster text-insert path for very long prompts so chat content is less likely to be cut off.
-
-The wrapper has been verified end-to-end against Qwen in attach mode; it now sends a normal human-style message, returns the raw Qwen reply by default, and can still recover the final assistant JSON when you ask for `--json`.
-
-Extra Qwen turns are now opt-in only. Use `--turns 2` or higher when you explicitly want a same-chat follow-up.
-
-Each run now binds to one dedicated Qwen tab/session via a session id marker, so parallel agents do not cross-read or reuse the wrong chat.
-
-Prompt shaping is centralized in `prompt-builder.js`, which keeps repo-aware turns in a strict code-oriented schema before they reach Qwen.
-URL-bearing context is only rendered when `context.urlAccessibility === 'public'`; private or unreachable URLs are stripped and replaced with local-only metadata.
-When repo URLs are not public, the relay can also write a temporary Markdown task packet under `coder-sin-qwen-tasks/` and publish it as a short-lived public GitHub Gist so Qwen can inspect the same context via a public URL.
-
-For repo-aware prompts, the relay now also includes:
-- the repository web URL
-- commit URL
-- selected file URLs from the current repo state
-- ranked source files plus PDFs/text/logs can be attached when useful; image files stay local-only and are not uploaded to Qwen
-- issue URLs explicitly present in the task
-- capability manifest entries that describe the relay's evidence/tool boundaries
-- curated official reference URLs for relevant technologies such as Node.js, Playwright, GitHub Actions, and Infisical when applicable
-- persistent consult metadata (`context_id`, `message_id`, previous summary)
-- a canonical `state_snapshot` envelope with protocol version, sender/receiver metadata, decision history, constraints, and completion criteria
-- a validator/critic review pass that scores replies, flags violations, and can strip fluff before returning text output
-- an autotraining module that stores snapshot/suggestion pairs for iterative Qwen-guided self-improvement
-- a lifecycle manager that tracks browser/CLI resources and performs bounded graceful cleanup on shutdown or fatal process events
-
-Prompt budgeting notes:
-- outbound URL-bearing context is capped at 10 unique URLs per message
-- set `SIN_CODER_QWEN_MAX_URLS` to temporarily raise the URL cap (bounded to 25)
-- decision history is trimmed to the last 2 relevant turns
-- image files stay local-only; ranked source files plus PDFs/text/logs are eligible upload formats
-
-Public/private behavior:
-- public repos: prefer repo/file/issue URLs plus official provider/platform docs links, and upload a small ranked set of relevant local source files so Qwen can inspect exact code when needed
-- private repos: attach relevant local files instead of relying on inaccessible repo URLs
-- image files are not sent to Qwen; describe them locally before asking Qwen to reason about them
-
-Resolved milestones:
-
-- #1 Stabilize `ask-qwen` wrapper execution
-- #2 Support real multi-turn Qwen conversations
-- #3 Keep Max Preview pinned after each turn
-
-## Handoff
-
-See `HANDOFF.md` for the compact operating notes for future agents.
-
-## Agents
-
-See `AGENTS.md` for repo rules and validation steps.
-
-## Changelog
-
-See `CHANGELOG.md` for the initial release notes.
-
-## Operations
-
-See `OPS.md` for smoke tests, logging, secrets handling, and rollback.
-See `LIVE_RUNBOOK.md` and `MERGE_RUNBOOK.md` for operational execution sequences.
-
-If slash-command execution still misbehaves in your environment, use the direct fallback temporarily:
-
-```bash
-node ./index.js --turns 1 "your prompt"
-```
-
-## Artifacts
-
-Live smoke checks and browser failures can write screenshots to `artifacts/` (or `SIN_CODER_QWEN_ARTIFACT_DIR`).
-
-## Secrets
-
-Use `pnpm run secrets:pull` after configuring Infisical locally.
-Validate secret presence with `pnpm run secrets:check` and see `SECRETS.md`.
-Push available values with `pnpm run secrets:push` only when the target Infisical project is correct.
-For non-interactive use, set `INFISICAL_PROJECT_ID` first.
-
-## Merge
-
-Use `pnpm run merge:main` only when `ALLOW_GH_MERGE=1` is set.
-The helper falls back to `gh auth token` when `GH_TOKEN` is not exported.
-If the repo has no remote yet, bootstrap one with `pnpm run remote:init` and `ALLOW_GH_REMOTE_CREATE=1`.
-
-## Notes
-
-- Node.js 20+
-- runtime deps: `ignore`, `playwright`
-- browser automation is required for live Qwen runs
-- secrets should stay out of git; use environment variables or an approved secret manager
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
