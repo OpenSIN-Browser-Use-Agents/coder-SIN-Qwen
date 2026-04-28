@@ -29,7 +29,7 @@
     "cdp:start": "bash ./scripts/start-cdp-sidecar.sh",
     "cdp:status": "bash ./scripts/cdp-status.sh",
     "secrets:pull": "bash ./scripts/sync-secrets.sh",
-    "secrets:check": "node ./secrets-check.js",
+    "secrets:check": "node ./packages/qwen-core/secrets-check.js",
     "secrets:push": "node ./push-secrets.js --apply",
     "live:prepare": "bash ./scripts/prepare-live-run.sh",
     "restore:last": "node ./restore.js --last",
@@ -37,8 +37,8 @@
     "merge:main": "bash ./scripts/merge-main.sh",
     "verify": "node ./verify.js",
     "postwrite": "node ./verify.js",
-    "release:patch": "npm version patch --no-git-tag-version",
-    "release:minor": "npm version minor --no-git-tag-version",
-    "release:major": "npm version major --no-git-tag-version"
+    "release:patch": "pnpm version patch --no-git-tag-version",
+    "release:minor": "pnpm version minor --no-git-tag-version",
+    "release:major": "pnpm version major --no-git-tag-version"
   }
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkSecrets } from '../secrets-check.js';
+import { checkSecrets } from '../packages/qwen-core/secrets-check.js';
 
 test('secret checker reports missing required secrets', () => {
   // Required secrets should fail loudly even if recommended ones are absent too.

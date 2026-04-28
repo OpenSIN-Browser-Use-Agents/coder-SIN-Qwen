@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { createTree, addNode } from '../conversation-tree.js';
-import { buildTreeLines, checkoutNode, loadConversationTreeForCli } from '../lib/conversation-tree-cli.js';
-import { resolveConversationTreeFile, saveTree } from '../conversation-tree-store.js';
+import { createTree, addNode } from '../packages/qwen-core/conversation-tree.js';
+import { buildTreeLines, checkoutNode, loadConversationTreeForCli } from '../packages/qwen-core/lib/conversation-tree-cli.js';
+import { resolveConversationTreeFile, saveTree } from '../packages/qwen-core/conversation-tree-store.js';
 
 test('buildTreeLines formats hierarchy and highlights active node', () => {
   const tree = createTree('Root', 'root response');

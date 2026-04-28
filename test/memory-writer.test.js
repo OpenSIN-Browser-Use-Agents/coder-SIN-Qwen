@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { atomicWriteJson } from '../lib/memory-writer.js';
+import { atomicWriteJson } from '../packages/qwen-core/lib/memory-writer.js';
 
 test('atomicWriteJson persists valid JSON and removes temp file', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'omo-memory-writer-'));

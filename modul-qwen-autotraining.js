@@ -3,9 +3,9 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildContext } from './packages/qwen-core/context.js';
 import { runQwenSession } from './browser.js';
-import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
-import { parseQwenResponse } from './parser.js';
-import { validateConsultResponse } from './validator.js';
+import { hydrateConsultContext, persistConsultMemory } from './packages/qwen-core/consult-memory.js';
+import { parseQwenResponse } from './packages/qwen-core/parser.js';
+import { validateConsultResponse } from './packages/qwen-core/validator.js';
 import { getScopedEnv } from './packages/qwen-core/runtime-config.js';
 import { readTraceContext } from './packages/qwen-core/trace.js';
 

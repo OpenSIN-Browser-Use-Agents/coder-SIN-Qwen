@@ -7,20 +7,15 @@
 ## Workspace scaffold
 
 - `apps/qwen-connector/` — monorepo app wrapper for the CLI entrypoint
-- `packages/qwen-core/` — shared pure helpers for context, prompts, trace, logging, and runtime config
-- `pnpm-workspace.yaml` / `turbo.json` — workspace foundation for the issue #25 migration path
+- `packages/qwen-core/` — shared pure helpers (context, prompts, trace, logging, runtime config, parser, validator, lifecycle, conversation tree, secrets, consult memory, and internal `lib/` utilities)
+- `packages/qwen-core/lib/` — internal helpers (memory-writer, prompt-guard, wait-for-completion, cdp-probe, conversation-tree-cli, git-prepare)
+- `pnpm-workspace.yaml` / `turbo.json` — workspace and task-graph foundation
+- `pnpm-lock.yaml` — pnpm lockfile (npm lockfile removed)
 
 ## Main files
 
 - `index.js` — CLI entrypoint
 - `browser.js` — strict UI-only browser session
-- `context.js` — repo context collector
-- `ignore-filter.js` — `.qwenignore` / `.gitignore` filtering
-- `git.js` — snapshot helper
-- `parser.js` — response parser
-- `runtime-config.js` — runtime env parsing and validation
-- `trace.js` — run/trace/span correlation helpers
-- `prompt-builder.js` — strict code-oriented prompt shaping
 - `public-task-file.js` — temporary task packets and optional public gist publishing
 - `qwen-account-rotation.js` — account cooldown and circuit breaker state
 - prompt delivery is normalized into a structured task envelope for both simple and repo-aware prompts, wrapper prefixes like `/ask-qwen` are stripped first, and the parser still prefers final assistant JSON over echoed prompt/context JSON
@@ -49,7 +44,6 @@
 - conversation-tree output now highlights the active/latest branch and JSON mode includes branch path + role history metadata for the new node
 - `--checkout <nodeId|latest|root|none>` persists the active conversation node locally, and `--prepare-commit` stages changes plus prints a commit-ready diff stat without creating a commit
 - `preflight.js` — dependency and env checks
-- `secrets-check.js` — secret presence checks
 - `SECRETS.md` — Infisical and env checklist
 - `LIVE_RUNBOOK.md` — live execution sequence
 - `MERGE_RUNBOOK.md` — guarded merge sequence
@@ -62,10 +56,8 @@
 - `scripts/bootstrap-remote.sh` — create remote repo when explicitly allowed
 - `verify.js` — install/test/build verification
 - `smoke.js` — local readiness check
-- `logger.js` — JSONL logging helper
 - `modul-qwen-autotraining.js` — Qwen-first self-improvement snapshot/suggestion orchestration
 - `cli-autotraining.js` — autotraining CLI entrypoint
-- `lifecycle.js` — graceful shutdown and registered resource cleanup
 - `OPS.md` — ops, logging, secrets, rollback
 - `SECURITY.md` — secret handling rules
 - `scripts/merge-main.sh` — guarded GitHub merge helper
@@ -75,9 +67,9 @@
 
 ## Commands
 
-- `npm run ask` — run the CLI
-- `npm run ask:json` — run the CLI with parsed JSON output
-- `npm run verify` — install, test, build
+- `ppnpm run ask` — run the CLI
+- `ppnpm run ask:json` — run the CLI with parsed JSON output
+- `ppnpm run verify` — install, test, build
 - `node ./index.js --snapshot <prompt>` — snapshot before run
 - `node ./index.js --dry-run <prompt>` — context only
 

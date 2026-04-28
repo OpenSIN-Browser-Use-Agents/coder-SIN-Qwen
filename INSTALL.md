@@ -3,7 +3,7 @@
 ## 1. Install dependencies
 
 ```bash
-npm install
+pnpm install
 ```
 
 This repo targets Node.js 20 (`.nvmrc` + `.npmrc` enforce it).
@@ -17,8 +17,8 @@ cp .env.example .env
 ## 2. Verify the repo
 
 ```bash
-npm run preflight
-npm run verify
+pnpm run preflight
+pnpm run verify
 ```
 
 `preflight` validates runtime config too, so invalid auth mode, timeout, or port values fail before Chrome starts.
@@ -46,8 +46,8 @@ If you never want this repo to touch the main Chrome owner, prepare the dedicate
 
 ```bash
 export CHROME_REMOTE_DEBUGGING_PORT="9444"
-npm run cdp:start
-npm run cdp:status
+pnpm run cdp:start
+pnpm run cdp:status
 ```
 
 The relay then attaches only to that prepared sidecar endpoint and will not auto-close the attached tab when the run finishes.
@@ -141,8 +141,8 @@ node ./index.js --json "build a feature"
 If Infisical is configured for this repo, pull local env files with:
 
 ```bash
-npm run secrets:pull
-npm run secrets:check
+pnpm run secrets:pull
+pnpm run secrets:check
 ```
 
 If the target Infisical project is already correct and you want to publish current values:
@@ -150,7 +150,7 @@ If the target Infisical project is already correct and you want to publish curre
 ```bash
 export INFISICAL_PROJECT_ID="fa7758b4-f84c-4297-966e-710056d531ef"
 export INFISICAL_SECRET_PATH="/opensin/coder-sin-qwen"
-npm run secrets:push
+pnpm run secrets:push
 ```
 
 Current Infisical target for this repo:
@@ -179,20 +179,20 @@ Rate-limit recovery is controlled with `QWEN_RATE_LIMIT_COOLDOWN_HOURS`, `QWEN_R
 If a snapshot was created, restore the last one with:
 
 ```bash
-npm run restore:last
+pnpm run restore:last
 ```
 
 ## 9. Artifacts
 
 Screenshots from live checks are written to `artifacts/` by default.
 
-If `npm run smoke:live` fails, inspect `artifacts/` and rerun the sidecar preparation flow instead of closing your main Chrome.
+If `pnpm run smoke:live` fails, inspect `artifacts/` and rerun the sidecar preparation flow instead of closing your main Chrome.
 
 The only allowed browser path is the fallback sidecar CDP attach. The relay prepares the sidecar and attaches to it automatically:
 
 ```bash
-npm run cdp:start
-npm run cdp:status
+pnpm run cdp:start
+pnpm run cdp:status
 ```
 
 The sidecar launch uses the Chrome binary directly, seeds cloned startup URLs, suppresses crash-restore/search-choice behavior, and opens `QWEN_URL` directly (default: `https://chat.qwen.ai`).
@@ -217,7 +217,7 @@ To seed Infisical-backed Qwen accounts for this repo, use the path `/opensin/cod
 ## 10. Live-run preparation
 
 ```bash
-npm run live:prepare
+pnpm run live:prepare
 ```
 
 Detailed sequence: `LIVE_RUNBOOK.md`
@@ -227,7 +227,7 @@ Detailed sequence: `LIVE_RUNBOOK.md`
 If you want the guarded merge helper, set `ALLOW_GH_MERGE=1` before running:
 
 ```bash
-npm run merge:main
+pnpm run merge:main
 ```
 
 If `GH_TOKEN` is not already exported, the helper will use `gh auth token` automatically.
@@ -238,5 +238,5 @@ If the local repo has no `origin` yet, bootstrap one first:
 
 ```bash
 export ALLOW_GH_REMOTE_CREATE=1
-npm run remote:init
+pnpm run remote:init
 ```

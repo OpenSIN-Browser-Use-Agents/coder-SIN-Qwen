@@ -4,7 +4,19 @@
 
 ### Added
 
-- **Monorepo scaffold started** — added `pnpm-workspace.yaml`, `turbo.json`, and initial `apps/qwen-connector` / `packages/qwen-core` shells to prepare the issue #25 migration without changing the current relay behavior.
+- **Monorepo migration complete** — all shared modules now live in `packages/qwen-core/`:
+  - `context.js`, `ignore-filter.js`, `circuit-breaker.js`, `logger.js`, `runtime-config.js`, `trace.js`, `browser-hardening.js`, `prompt-builder.js` (Phase 1)
+  - `parser.js`, `validator.js`, `lifecycle.js`, `conversation-tree.js`, `secrets-check.js`, `conversation-tree-store.js`, `consult-memory.js` (Phase 2)
+  - `lib/memory-writer.js`, `lib/prompt-guard.js`, `lib/wait-for-completion.js`, `lib/cdp-probe.js`, `lib/conversation-tree-cli.js`, `lib/git-prepare.js` (Phase 2)
+- **pnpm workspace** — replaced `package-lock.json` with `pnpm-lock.yaml`, set `packageManager: pnpm@10.0.0`
+- **CI updated** — `.github/workflows/ci.yml` and `release.yml` now use `pnpm/action-setup@v4` + `ppnpm install --frozen-lockfile` instead of `ppnpm install --frozen-lockfile`
+- **Barrel exports** — `packages/qwen-core/index.js` re-exports all public modules; `packages/qwen-core/package.json` exposes `./lib/*` subpath
+
+### Removed
+
+- Root duplicates deleted: `parser.js`, `validator.js`, `lifecycle.js`, `conversation-tree.js`, `secrets-check.js`, `conversation-tree-store.js`, `consult-memory.js`, `logger.js`, `runtime-config.js`, `trace.js`, `browser-hardening.js`, `prompt-builder.js`, `ignore-filter.js`, `circuit-breaker.js`, `context.js`
+- Root `lib/` directory deleted (all files moved to `packages/qwen-core/lib/`)
+- `package-lock.json` deleted in favor of `pnpm-lock.yaml`
 
 ### Fixed
 

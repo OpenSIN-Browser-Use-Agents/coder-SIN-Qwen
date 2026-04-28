@@ -9,15 +9,18 @@ jobs:
   test-build:
     runs-on: ubuntu-latest
     steps:
-      # CI keeps the standalone repo honest on every push and PR.
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci
-      - run: npm run preflight
-      - run: npm test
-      - run: npm run build
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run preflight
+      - run: pnpm test
+      - run: pnpm run build

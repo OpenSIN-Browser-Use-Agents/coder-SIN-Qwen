@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_MAX_PROMPT_LENGTH, guardPromptLength, resolvePromptLengthGuard } from '../lib/prompt-guard.js';
+import { DEFAULT_MAX_PROMPT_LENGTH, guardPromptLength, resolvePromptLengthGuard } from '../packages/qwen-core/lib/prompt-guard.js';
 
 test('resolvePromptLengthGuard returns defaults for invalid env values', () => {
   const guard = resolvePromptLengthGuard({ SIN_CODER_QWEN_MAX_PROMPT_LENGTH: 'oops' });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { runAutotrainingCycle } from './modul-qwen-autotraining.js';
-import { attachLifecycleHooks } from './lifecycle.js';
+import { attachLifecycleHooks } from './packages/qwen-core/lifecycle.js';
 
 attachLifecycleHooks();
 

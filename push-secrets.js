@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { checkSecrets, loadEnvFile, loadSecretsSpec } from './secrets-check.js';
+import { checkSecrets, loadEnvFile, loadSecretsSpec } from './packages/qwen-core/secrets-check.js';
 
 export function collectSecretEntries(env = process.env, localEnv = loadEnvFile(), spec = loadSecretsSpec()) {
   const names = [...new Set([...spec.required, ...spec.recommended])];

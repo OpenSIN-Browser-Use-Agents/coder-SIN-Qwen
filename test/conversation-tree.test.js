@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { addNode, buildBranchPrompt, createTree, deserialize, getBranchPath, serialize } from '../conversation-tree.js';
-import { appendTurn, buildBranchContextPrompt, buildConversationTreePayload, loadTree, printTree, resolveBranchTarget, resolveConversationTreeFile, saveTree } from '../conversation-tree-store.js';
+import { addNode, buildBranchPrompt, createTree, deserialize, getBranchPath, serialize } from '../packages/qwen-core/conversation-tree.js';
+import { appendTurn, buildBranchContextPrompt, buildConversationTreePayload, loadTree, printTree, resolveBranchTarget, resolveConversationTreeFile, saveTree } from '../packages/qwen-core/conversation-tree-store.js';
 
 test('createTree initializes a valid root node', () => {
   const tree = createTree('init prompt', 'init response', { traceId: 't1' });

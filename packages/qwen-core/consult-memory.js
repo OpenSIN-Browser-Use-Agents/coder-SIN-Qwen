@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { atomicWriteJson } from './lib/memory-writer.js';
-import { APP_NAME, getScopedEnv } from './packages/qwen-core/runtime-config.js';
-import { installTraceContext, readTraceContext } from './packages/qwen-core/trace.js';
+import { APP_NAME, getScopedEnv } from './runtime-config.js';
+import { installTraceContext, readTraceContext } from './trace.js';
 
 const DEFAULT_MEMORY_FILE = '.coder-sin-qwen-memory.json';
 

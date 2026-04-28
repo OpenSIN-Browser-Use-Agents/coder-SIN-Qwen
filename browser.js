@@ -5,14 +5,14 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { assertCompleteReply, normalizeRenderedReplyText, safeInjectInput } from './packages/qwen-core/browser-hardening.js';
 import { hasQwenAccounts, isRateLimitCircuitOpen, loadQwenAccountState, loadQwenAccounts, markAccountPreferred, markRateLimitFailure, markRateLimitSuccess, resolveQwenAccountStatePath, resolveQwenRateLimitPolicy, saveQwenAccountState, selectNextQwenAccounts } from './qwen-account-rotation.js';
-import { registerLifecycleResource, unregisterLifecycleResource } from './lifecycle.js';
+import { registerLifecycleResource, unregisterLifecycleResource } from './packages/qwen-core/lifecycle.js';
 import { writeLogEntry } from './packages/qwen-core/logger.js';
-import { probeCdpEndpoint } from './lib/cdp-probe.js';
-import { guardPromptLength } from './lib/prompt-guard.js';
+import { probeCdpEndpoint } from './packages/qwen-core/lib/cdp-probe.js';
+import { guardPromptLength } from './packages/qwen-core/lib/prompt-guard.js';
 import { getScopedEnv } from './packages/qwen-core/runtime-config.js';
 import { installTraceContext, readTraceContext } from './packages/qwen-core/trace.js';
 import { buildPromptPayload } from './packages/qwen-core/prompt-builder.js';
-import { waitForQwenCompletion } from './lib/wait-for-completion.js';
+import { waitForQwenCompletion } from './packages/qwen-core/lib/wait-for-completion.js';
 
 export { buildPromptPayload };
 

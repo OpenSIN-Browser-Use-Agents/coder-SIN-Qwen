@@ -14,13 +14,13 @@ Merge a validated branch to `main` using the guarded GitHub helper.
 
 ## Steps
 
-1. `npm run verify`
-2. `npm run secrets:check`
+1. `pnpm run verify`
+2. `pnpm run secrets:check`
 3. `git status --short`
-4. `export ALLOW_GH_REMOTE_CREATE=1` and `npm run remote:init` if no remote exists
+4. `export ALLOW_GH_REMOTE_CREATE=1` and `pnpm run remote:init` if no remote exists
 5. `export ALLOW_GH_MERGE=1`
 6. `export GH_TOKEN=...`
-7. `npm run merge:main`
+7. `pnpm run merge:main`
 
 ## Notes
 

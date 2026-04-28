@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { probeCdpEndpoint } from '../lib/cdp-probe.js';
+import { probeCdpEndpoint } from '../packages/qwen-core/lib/cdp-probe.js';
 
 test('probeCdpEndpoint returns ok=true for a healthy endpoint', async () => {
   const result = await probeCdpEndpoint('http://127.0.0.1:9444', 2500, {

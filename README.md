@@ -16,22 +16,16 @@ It can also persist a local conversation tree so later runs can branch from any 
 ## Files
 
 - `index.js` — CLI entrypoint
-- `context.js` — gathers repo context
 - `browser.js` — browser/session adapter
-- `parser.js` — turns model output into structured actions
 - `preflight.js` — dependency and environment gate
 - `modul-qwen-autotraining.js` — Qwen-first self-improvement snapshot/suggestion engine
 - `cli-autotraining.js` — CLI entrypoint for autotraining runs
-- `lifecycle.js` — graceful shutdown and resource cleanup manager
-- `secrets-check.js` — secret presence validator
 - `push-secrets.js` — Infisical push helper
 - `git.js` — optional snapshot helper
-- `logger.js` — JSONL run logging
 - `smoke.js` — readiness check
 - `restore.js` — rollback helper
 - `public-task-file.js` — temporary task packet writer and optional public gist publisher
 - `scripts/merge-main.sh` — guarded GitHub merge helper
-- `ignore-filter.js` — `.qwenignore` / `.gitignore` filtering
 - `INDEX.md` — repo map
 - `INSTALL.md` — setup guide
 - `OPS.md` — operations and rollback notes
@@ -40,13 +34,12 @@ It can also persist a local conversation tree so later runs can branch from any 
 
 ## Workspace scaffold
 
-The monorepo migration has started with a minimal scaffold:
+All shared modules live in the monorepo package:
 
-- `apps/qwen-connector/` — future CLI package wrapper
-- `packages/qwen-core/` — shared helper package scaffold
-- `pnpm-workspace.yaml` and `turbo.json` — workspace and task-graph foundations
-
-The root CLI still remains the source of truth while the migration continues.
+- `apps/qwen-connector/` — CLI package wrapper
+- `packages/qwen-core/` — shared helpers: context, prompts, trace, logging, runtime config, parser, validator, lifecycle, conversation tree, secrets, consult memory
+- `packages/qwen-core/lib/` — internal utilities: memory-writer, prompt-guard, wait-for-completion, cdp-probe, conversation-tree-cli, git-prepare
+- `pnpm-workspace.yaml` / `turbo.json` / `pnpm-lock.yaml` — workspace, task-graph, and lockfile foundation
 
 ## Usage
 
@@ -131,7 +124,7 @@ If Chrome already has the `Default` profile open, close those windows first.
 bash ./scripts/after-write.sh
 ```
 
-This runs `npm install` and then `npm run build`.
+This runs `pnpm install` and then `pnpm run build`.
 
 Recommended reliable verification:
 
@@ -142,35 +135,35 @@ node ./verify.js
 or:
 
 ```bash
-npm run verify
+pnpm run verify
 ```
 
 ## Testing
 
 ```bash
-npm test
+pnpm test
 ```
 
 Preflight and smoke:
 
 ```bash
-npm run preflight
-npm run smoke
-npm run smoke:live
-npm run cdp:status
+pnpm run preflight
+pnpm run smoke
+pnpm run smoke:live
+pnpm run cdp:status
 ```
 
 Live-run preparation:
 
 ```bash
-npm run live:prepare
+pnpm run live:prepare
 ```
 
 Use the dedicated non-destructive sidecar path; the relay prepares it and attaches by CDP:
 
 ```bash
 export CHROME_REMOTE_DEBUGGING_PORT="9444"
-npm run cdp:start
+pnpm run cdp:start
 export CHROME_CDP_URL="http://127.0.0.1:9444"
 ```
 
@@ -189,8 +182,8 @@ Node.js 20 is the supported runtime floor for this repo.
 To enable real Qwen submission with Playwright:
 
 ```bash
-npm i -D playwright
-npx playwright install chromium
+pnpm add -D playwright
+pnpm dlx playwright install chromium
 ```
 
 Then optionally point the script at an authenticated Chrome profile:
@@ -219,8 +212,8 @@ If the recovered session lands on the Qwen auth page, the relay uses direct emai
 
 ## CI / release
 
-- CI runs `npm test` and `npm run build`
-- release versions use semver via `npm run release:patch|minor|major`
+- CI runs `npm test` and `pnpm run build`
+- release versions use semver via `pnpm run release:patch|minor|major`
 - after version bumps, create a Git tag and push it to publish a release
 
 ## Environment
@@ -358,16 +351,16 @@ Live smoke checks and browser failures can write screenshots to `artifacts/` (or
 
 ## Secrets
 
-Use `npm run secrets:pull` after configuring Infisical locally.
-Validate secret presence with `npm run secrets:check` and see `SECRETS.md`.
-Push available values with `npm run secrets:push` only when the target Infisical project is correct.
+Use `pnpm run secrets:pull` after configuring Infisical locally.
+Validate secret presence with `pnpm run secrets:check` and see `SECRETS.md`.
+Push available values with `pnpm run secrets:push` only when the target Infisical project is correct.
 For non-interactive use, set `INFISICAL_PROJECT_ID` first.
 
 ## Merge
 
-Use `npm run merge:main` only when `ALLOW_GH_MERGE=1` is set.
+Use `pnpm run merge:main` only when `ALLOW_GH_MERGE=1` is set.
 The helper falls back to `gh auth token` when `GH_TOKEN` is not exported.
-If the repo has no remote yet, bootstrap one with `npm run remote:init` and `ALLOW_GH_REMOTE_CREATE=1`.
+If the repo has no remote yet, bootstrap one with `pnpm run remote:init` and `ALLOW_GH_REMOTE_CREATE=1`.
 
 ## Notes
 

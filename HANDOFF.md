@@ -19,8 +19,8 @@
 ## Main entrypoints
 
 - `node ./index.js <prompt>`
-- `npm run verify`
-- `npm run ask`
+- `pnpm run verify`
+- `pnpm run ask`
 - `/ask-qwen` through `.opencode/opencode.json`
 
 ## Important files

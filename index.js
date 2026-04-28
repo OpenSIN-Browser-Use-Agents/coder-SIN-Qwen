@@ -2,22 +2,22 @@
 // Main CLI entrypoint for the standalone Qwen relay agent.
 import { buildContext } from './packages/qwen-core/context.js';
 import { getQwenCompletionMetadata, runQwenSession } from './browser.js';
-import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
+import { hydrateConsultContext, persistConsultMemory } from './packages/qwen-core/consult-memory.js';
 import { prepareChromeConnectionForRun } from './cdp-recovery.js';
-import { parseQwenResponse } from './parser.js';
+import { parseQwenResponse } from './packages/qwen-core/parser.js';
 import { createSnapshot } from './git.js';
 import { runSmokeCheck } from './smoke.js';
 import { writeLogEntry, resolveLogFile } from './packages/qwen-core/logger.js';
 import { restoreLatestSnapshot, restoreSnapshot } from './restore.js';
 import { runPreflight } from './preflight.js';
-import { validateConsultResponse } from './validator.js';
-import { attachLifecycleHooks, registerLifecycleResource, runLifecycleCleanup } from './lifecycle.js';
+import { validateConsultResponse } from './packages/qwen-core/validator.js';
+import { attachLifecycleHooks, registerLifecycleResource, runLifecycleCleanup } from './packages/qwen-core/lifecycle.js';
 import { getScopedEnv, validateRuntimeConfig } from './packages/qwen-core/runtime-config.js';
 import { installTraceContext } from './packages/qwen-core/trace.js';
 import { prepareTemporaryPublicTaskFile } from './public-task-file.js';
-import { appendTurn, buildBranchContextPrompt, buildConversationTreePayload, loadTree, printTree, resolveBranchTarget, resolveConversationTreeFile } from './conversation-tree-store.js';
-import { buildTreeLines, checkoutNode } from './lib/conversation-tree-cli.js';
-import { prepareCommit } from './lib/git-prepare.js';
+import { appendTurn, buildBranchContextPrompt, buildConversationTreePayload, loadTree, printTree, resolveBranchTarget, resolveConversationTreeFile } from './packages/qwen-core/conversation-tree-store.js';
+import { buildTreeLines, checkoutNode } from './packages/qwen-core/lib/conversation-tree-cli.js';
+import { prepareCommit } from './packages/qwen-core/lib/git-prepare.js';
 
 async function main() {
   attachLifecycleHooks();

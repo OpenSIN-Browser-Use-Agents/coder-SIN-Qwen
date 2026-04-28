@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
-import { probeCdpEndpoint } from './lib/cdp-probe.js';
+import { probeCdpEndpoint } from './packages/qwen-core/lib/cdp-probe.js';
 
 const DEFAULT_QWEN_URL = 'https://chat.qwen.ai';
 const BLOCKED_SIDECAR_ITEMS = new Set([

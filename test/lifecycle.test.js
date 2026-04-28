@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachLifecycleHooks, getLifecycleResourceCount, registerLifecycleResource, resetLifecycleForTests, runLifecycleCleanup, unregisterLifecycleResource } from '../lifecycle.js';
+import { attachLifecycleHooks, getLifecycleResourceCount, registerLifecycleResource, resetLifecycleForTests, runLifecycleCleanup, unregisterLifecycleResource } from '../packages/qwen-core/lifecycle.js';
 
 test('registers and unregisters lifecycle resources', () => {
   resetLifecycleForTests();

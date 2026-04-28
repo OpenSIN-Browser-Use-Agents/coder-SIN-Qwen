@@ -1,4 +1,4 @@
-import { detectIncompleteReplyIssues } from './packages/qwen-core/browser-hardening.js';
+import { detectIncompleteReplyIssues } from './browser-hardening.js';
 
 const FLUFF_PATTERNS = [
   /\b(?:as an ai|language model|i'?m sorry|apologies|unfortunately|please note|keep in mind|let me know|feel free|hope this helps|in conclusion|to summarize)\b/giu,

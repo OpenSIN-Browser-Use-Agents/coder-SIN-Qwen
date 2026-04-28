@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { prepareCommit } from '../lib/git-prepare.js';
+import { prepareCommit } from '../packages/qwen-core/lib/git-prepare.js';
 
 const exec = promisify(execFile);
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseQwenResponse } from '../parser.js';
+import { parseQwenResponse } from '../packages/qwen-core/parser.js';
 
 test('parses structured JSON payloads', () => {
   // Structured payloads are the ideal response shape from the model.

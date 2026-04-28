@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stripFluff, validateConsultResponse } from '../validator.js';
+import { stripFluff, validateConsultResponse } from '../packages/qwen-core/validator.js';
 
 test('accepts concise repo-aware guidance', () => {
   const review = validateConsultResponse({

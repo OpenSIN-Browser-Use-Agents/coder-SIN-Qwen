@@ -2,13 +2,13 @@
 
 ## Run modes
 
-- `npm run preflight` — dependency and environment gate
-- `npm run verify` — install, test, build
-- `npm run smoke` — local browser/profile readiness check
-- `npm run smoke:live` — browser smoke with screenshots + selector report
-- `npm run cdp:start` — launch a separate debug sidecar without closing main Chrome
-- `npm run cdp:status` — check whether the CDP endpoint is alive
-- `npm run live:prepare` — preflight + secrets + live browser smoke
+- `pnpm run preflight` — dependency and environment gate
+- `pnpm run verify` — install, test, build
+- `pnpm run smoke` — local browser/profile readiness check
+- `pnpm run smoke:live` — browser smoke with screenshots + selector report
+- `pnpm run cdp:start` — launch a separate debug sidecar without closing main Chrome
+- `pnpm run cdp:status` — check whether the CDP endpoint is alive
+- `pnpm run live:prepare` — preflight + secrets + live browser smoke
 - `node ./index.js --dry-run <prompt>` — context only
 - `node ./index.js --snapshot <prompt>` — create a Git snapshot before execution
 
@@ -34,24 +34,24 @@ If your organization uses Infisical, mirror only the needed fields there one by 
 
 Never commit browser cookies or token files.
 
-Run `npm run secrets:check` after pulling from Infisical.
-Run `npm run secrets:push` only when you are sure the current Infisical project is the intended target.
+Run `pnpm run secrets:check` after pulling from Infisical.
+Run `pnpm run secrets:push` only when you are sure the current Infisical project is the intended target.
 
 ## Rollback
 
 - Use `--snapshot` before risky runs.
 - If something breaks, revert with `git reset --hard <snapshot-hash>`.
-- Or run `npm run restore:last`.
+- Or run `pnpm run restore:last`.
 
 ## Merge helper
 
-- `npm run merge:main` is guarded by `ALLOW_GH_MERGE=1` and `GH_TOKEN`.
+- `pnpm run merge:main` is guarded by `ALLOW_GH_MERGE=1` and `GH_TOKEN`.
 - It creates/merges a PR via the GitHub CLI.
-- `npm run remote:init` is separately guarded by `ALLOW_GH_REMOTE_CREATE=1`.
+- `pnpm run remote:init` is separately guarded by `ALLOW_GH_REMOTE_CREATE=1`.
 
 ## Browser verification
 
-- Use `npm run smoke` for local readiness.
+- Use `pnpm run smoke` for local readiness.
 - Set `SIN_CODER_QWEN_SMOKE_LIVE=1` for a live page check.
 - Screenshots are stored in `artifacts/` by default.
 - Live checks prepare the sidecar CDP attach path automatically, so your main Chrome can stay open.

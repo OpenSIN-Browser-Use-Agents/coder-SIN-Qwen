@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { hydrateConsultContext, persistConsultMemory } from '../consult-memory.js';
+import { hydrateConsultContext, persistConsultMemory } from '../packages/qwen-core/consult-memory.js';
 
 const TRACE_ENV_KEYS = [
   'SIN_CODER_QWEN_RUN_ID',

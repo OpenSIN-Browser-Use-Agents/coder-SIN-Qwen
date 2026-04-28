@@ -5,4 +5,17 @@ export { APP_NAME, PACKAGE_NAME, getScopedEnv, parseBooleanEnv, parseIntegerEnv,
 export { resolveLogFile, writeLogEntry } from './logger.js';
 export { readTraceContext, installTraceContext, tracePayload } from './trace.js';
 export { loadIgnorePatterns, filterPaths } from './ignore-filter.js';
-export { CircuitBreaker } from './circuit-breaker.js';
+export { CircuitBreaker, withCircuitBreaker, defaultCircuitBreaker } from './circuit-breaker.js';
+export { parseQwenResponse } from './parser.js';
+export { validateConsultResponse, stripFluff } from './validator.js';
+export { attachLifecycleHooks, registerLifecycleResource, unregisterLifecycleResource, runLifecycleCleanup, resetLifecycleForTests, getLifecycleResourceCount } from './lifecycle.js';
+export { createTree, addNode, getBranchPath, buildBranchPrompt, serialize, deserialize, setActiveNodeId } from './conversation-tree.js';
+export { loadSecretsSpec, loadEnvFile, checkSecrets } from './secrets-check.js';
+export { TREE_FILE, resolveConversationTreeFile, loadTree, saveTree, appendTurn, buildBranchContextPrompt, buildConversationTreePayload, printTree, resolveBranchTarget } from './conversation-tree-store.js';
+export { hydrateConsultContext, persistConsultMemory, resolveMemoryFile, buildStateSnapshot } from './consult-memory.js';
+export { atomicWriteJson } from './lib/memory-writer.js';
+export { DEFAULT_MAX_PROMPT_LENGTH, resolvePromptLengthGuard, guardPromptLength } from './lib/prompt-guard.js';
+export { waitForQwenCompletion } from './lib/wait-for-completion.js';
+export { probeCdpEndpoint } from './lib/cdp-probe.js';
+export { loadConversationTreeForCli, buildTreeLines, checkoutNode, buildTreeJson } from './lib/conversation-tree-cli.js';
+export { getRepoRoot, prepareCommit } from './lib/git-prepare.js';

@@ -38,7 +38,7 @@ node ./secrets-check.js
 ## Pull from Infisical
 
 ```bash
-npm run secrets:pull
+pnpm run secrets:pull
 ```
 
 Then validate again:
@@ -54,7 +54,7 @@ If the active Infisical project is already correct:
 ```bash
 export INFISICAL_PROJECT_ID="fa7758b4-f84c-4297-966e-710056d531ef"
 export INFISICAL_SECRET_PATH="/opensin/coder-sin-qwen"
-npm run secrets:push
+pnpm run secrets:push
 ```
 
 This only pushes values that are actually present in `process.env` or `.env.local`.
