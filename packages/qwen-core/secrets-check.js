@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Secret validation stays local; it only checks that expected names are present.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { getSecretClient } from './secret-schema.js';
 
 const root = process.cwd();
 const requiredFile = path.join(root, 'secrets.required.json');
@@ -29,16 +29,20 @@ export function loadEnvFile(filePath = envFile) {
 
 export function checkSecrets(env = process.env, spec = loadSecretsSpec(), localEnv = loadEnvFile()) {
   const present = (name) => Boolean(env[name] || localEnv[name]);
-
   return {
     requiredMissing: spec.required.filter((name) => !present(name)),
     recommendedMissing: spec.recommended.filter((name) => !present(name))
   };
 }
 
+export function checkSecretsSecure() {
+  return getSecretClient().audit();
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const result = checkSecrets();
-  const ok = result.requiredMissing.length === 0;
+  const client = getSecretClient();
+  const result = client.audit();
+  const ok = result.ok;
   console.log(JSON.stringify({ ok, ...result }, null, 2));
   process.exit(ok ? 0 : 1);
 }

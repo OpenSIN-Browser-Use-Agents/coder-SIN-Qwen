@@ -19,3 +19,5 @@ export { waitForQwenCompletion } from './lib/wait-for-completion.js';
 export { probeCdpEndpoint } from './lib/cdp-probe.js';
 export { loadConversationTreeForCli, buildTreeLines, checkoutNode, buildTreeJson } from './lib/conversation-tree-cli.js';
 export { getRepoRoot, prepareCommit } from './lib/git-prepare.js';
+export { SecretClient, createSecretClient } from './lib/secret-client.js';
+export { SECRET_SCHEMA, getSecretClient, hasQwenCredentials } from './secret-schema.js';

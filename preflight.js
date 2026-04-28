@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
 import { buildCandidateCdpUrls } from './cdp-recovery.js';
 import { getScopedEnv, validateRuntimeConfig } from './packages/qwen-core/runtime-config.js';
+import { getSecretClient } from './packages/qwen-core/secret-schema.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -20,6 +21,8 @@ export async function runPreflight() {
   const allowedSidecarUrl = `http://127.0.0.1:${runtimeConfig.chromeRemoteDebuggingPort}`;
   const configuredAttachUrl = String(process.env.CHROME_CDP_URL || '').trim();
   const connectionPolicyOk = !configuredAttachUrl || configuredAttachUrl === allowedSidecarUrl;
+  const secretClient = getSecretClient();
+  const secretAudit = secretClient.audit();
   const checks = {
     node: { ok: nodeMajor >= 20, version: process.versions.node },
     git: await commandStatus('git', ['--version']),
@@ -49,11 +52,12 @@ export async function runPreflight() {
       rateLimitFailureThreshold: runtimeConfig.rateLimitFailureThreshold,
       rateLimitCircuitBreakerMinutes: runtimeConfig.rateLimitCircuitBreakerMinutes,
       chromeRemoteDebuggingPort: runtimeConfig.chromeRemoteDebuggingPort
-    }
+    },
+    secrets: secretAudit
   };
 
   return {
-    ok: checks.node.ok && checks.git.ok && checks.chromeProfile.ok && checks.chromeConnection.policyOk,
+    ok: checks.node.ok && checks.git.ok && checks.chromeProfile.ok && checks.chromeConnection.policyOk && secretAudit.ok,
     ...checks
   };
 }

@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parseIntegerEnv } from './packages/qwen-core/runtime-config.js';
+import { getSecretClient } from './packages/qwen-core/secret-schema.js';
 
 const DEFAULT_STATE_PATH = path.join(process.cwd(), 'artifacts', 'qwen-account-state.json');
 const DEFAULT_COOLDOWN_HOURS = 20;
@@ -42,6 +43,22 @@ export function loadQwenAccounts(env = process.env) {
       label: String(env[`QWEN_ACCOUNT_${id}_LABEL`] || `account-${id}`).trim()
     }))
     .filter((account) => account.email && account.password);
+}
+
+export function loadQwenAccountsFromClient(client = getSecretClient()) {
+  const ids = [];
+  for (let index = 1; index <= 9; index += 1) {
+    const id = String(index);
+    if (client.has(`QWEN_ACCOUNT_${id}_EMAIL`) || client.has(`QWEN_ACCOUNT_${id}_PASSWORD`)) {
+      ids.push(id);
+    }
+  }
+  return ids.map((id) => ({
+    id,
+    email: client.getOptional(`QWEN_ACCOUNT_${id}_EMAIL`, ''),
+    password: client.getOptional(`QWEN_ACCOUNT_${id}_PASSWORD`, ''),
+    label: client.getOptional(`QWEN_ACCOUNT_${id}_LABEL`, `account-${id}`),
+  })).filter((account) => account.email && account.password);
 }
 
 export function hasQwenAccounts(env = process.env) {
