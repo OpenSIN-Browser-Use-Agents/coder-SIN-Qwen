@@ -3,7 +3,7 @@ import path from 'node:path';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { buildPromptPayload } from './prompt-builder.js';
+import { buildPromptPayload } from './packages/qwen-core/prompt-builder.js';
 
 const execFile = promisify(execFileCallback);
 const DEFAULT_TASK_DIR = 'coder-sin-qwen-tasks';

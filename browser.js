@@ -11,7 +11,7 @@ import { probeCdpEndpoint } from './lib/cdp-probe.js';
 import { guardPromptLength } from './lib/prompt-guard.js';
 import { getScopedEnv } from './runtime-config.js';
 import { installTraceContext, readTraceContext } from './trace.js';
-import { buildPromptPayload } from './prompt-builder.js';
+import { buildPromptPayload } from './packages/qwen-core/prompt-builder.js';
 import { waitForQwenCompletion } from './lib/wait-for-completion.js';
 
 export { buildPromptPayload };
