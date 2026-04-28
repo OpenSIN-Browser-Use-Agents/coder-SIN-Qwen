@@ -37,8 +37,12 @@
     "merge:main": "bash ./scripts/merge-main.sh",
     "verify": "node ./verify.js",
     "postwrite": "node ./verify.js",
+    "coverage": "node --experimental-coverage --test test/*.test.js 2>&1 | tail -20",
     "release:patch": "pnpm version patch --no-git-tag-version",
     "release:minor": "pnpm version minor --no-git-tag-version",
     "release:major": "pnpm version major --no-git-tag-version"
+  },
+  "devDependencies": {
+    "fast-check": "^4.7.0"
   }
 }
