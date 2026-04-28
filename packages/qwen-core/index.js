@@ -23,3 +23,6 @@ export { SecretClient, createSecretClient } from './lib/secret-client.js';
 export { SECRET_SCHEMA, getSecretClient, hasQwenCredentials } from './secret-schema.js';
 export { SelectorStrategy, SELECTOR_CHAINS, getChain, getAllChainNames, getChainSelectors } from './lib/selector-chain.js';
 export { SelectorResolver, createSelectorResolver } from './lib/selector-resolver.js';
+export { computeDomHash, compareDomHashes } from './lib/dom-hash.js';
+export { getPlaybook, getAllPlaybookNames, inferPlaybookFromError } from './lib/recovery-playbook.js';
+export { SelfHealOrchestrator, createSelfHealOrchestrator } from './lib/self-heal.js';
