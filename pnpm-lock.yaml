@@ -15,9 +15,15 @@ importers:
         specifier: ^1.59.1
         version: 1.59.1
     devDependencies:
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
       fast-check:
         specifier: ^4.7.0
         version: 4.7.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   apps/qwen-connector:
     dependencies:
@@ -28,6 +34,9 @@ importers:
   packages/qwen-core: {}
 
 packages:
+
+  '@types/node@25.6.0':
+    resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
 
   fast-check@4.7.0:
     resolution: {integrity: sha512-NsZRtqvSSoCP0HbNjUD+r1JH8zqZalyp6gLY9e7OYs7NK9b6AHOs2baBFeBG7bVNsuoukh89x2Yg3rPsul8ziQ==}
@@ -55,7 +64,19 @@ packages:
   pure-rand@8.4.0:
     resolution: {integrity: sha512-IoM8YF/jY0hiugFo/wOWqfmarlE6J0wc6fDK1PhftMk7MGhVZl88sZimmqBBFomLOCSmcCCpsfj7wXASCpvK9A==}
 
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  undici-types@7.19.2:
+    resolution: {integrity: sha512-qYVnV5OEm2AW8cJMCpdV20CDyaN3g0AjDlOGf1OW4iaDEx8MwdtChUp4zu4H0VP3nDRF/8RKWH+IPp9uW0YGZg==}
+
 snapshots:
+
+  '@types/node@25.6.0':
+    dependencies:
+      undici-types: 7.19.2
 
   fast-check@4.7.0:
     dependencies:
@@ -75,3 +96,7 @@ snapshots:
       fsevents: 2.3.2
 
   pure-rand@8.4.0: {}
+
+  typescript@6.0.3: {}
+
+  undici-types@7.19.2: {}
