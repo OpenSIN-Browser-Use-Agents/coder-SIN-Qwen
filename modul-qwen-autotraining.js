@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { buildContext } from './context.js';
+import { buildContext } from './packages/qwen-core/context.js';
 import { runQwenSession } from './browser.js';
 import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
 import { parseQwenResponse } from './parser.js';

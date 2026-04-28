@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { buildAttachmentCandidates, buildContext, filterReachableUrlEntries, sanitizeFileReferenceUrls, verifyUrlReachable } from '../context.js';
+import { buildAttachmentCandidates, buildContext, filterReachableUrlEntries, sanitizeFileReferenceUrls, verifyUrlReachable } from '../packages/qwen-core/context.js';
 
 test('keeps simple chat prompts structured without repo dump', async () => {
   const context = await buildContext({ prompt: 'Say hello in one short sentence.' });

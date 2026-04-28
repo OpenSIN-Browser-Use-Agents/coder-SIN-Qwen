@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Main CLI entrypoint for the standalone Qwen relay agent.
-import { buildContext } from './context.js';
+import { buildContext } from './packages/qwen-core/context.js';
 import { getQwenCompletionMetadata, runQwenSession } from './browser.js';
 import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
 import { prepareChromeConnectionForRun } from './cdp-recovery.js';
