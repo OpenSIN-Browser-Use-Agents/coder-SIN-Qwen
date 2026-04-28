@@ -28,3 +28,6 @@ export { getPlaybook, getAllPlaybookNames, inferPlaybookFromError } from './lib/
 export { SelfHealOrchestrator, createSelfHealOrchestrator } from './lib/self-heal.js';
 export { BrowserState, BrowserEvent, isValidTransition, nextState, BrowserStateMachine, createBrowserStateMachine } from './lib/browser-state-machine.js';
 export { EphemeralProfile, createEphemeralProfile, SessionHealthMonitor, createSessionHealthMonitor } from './lib/ephemeral-profile.js';
+export { TokenBudgetManager, createTokenBudgetManager, CATEGORY_BUDGET } from './lib/token-budget.js';
+export { RelevanceScorer, createRelevanceScorer } from './lib/relevance-scorer.js';
+export { ContextCompressor, createContextCompressor } from './lib/context-compressor.js';
