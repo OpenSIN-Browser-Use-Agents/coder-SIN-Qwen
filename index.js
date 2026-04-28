@@ -7,7 +7,7 @@ import { prepareChromeConnectionForRun } from './cdp-recovery.js';
 import { parseQwenResponse } from './parser.js';
 import { createSnapshot } from './git.js';
 import { runSmokeCheck } from './smoke.js';
-import { writeLogEntry, resolveLogFile } from './logger.js';
+import { writeLogEntry, resolveLogFile } from './packages/qwen-core/logger.js';
 import { restoreLatestSnapshot, restoreSnapshot } from './restore.js';
 import { runPreflight } from './preflight.js';
 import { validateConsultResponse } from './validator.js';

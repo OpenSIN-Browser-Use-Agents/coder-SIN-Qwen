@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertCompleteReply, detectIncompleteReplyIssues, normalizeRenderedReplyText, resolveHardeningFlags, safeInjectInput } from '../browser-hardening.js';
+import { assertCompleteReply, detectIncompleteReplyIssues, normalizeRenderedReplyText, resolveHardeningFlags, safeInjectInput } from '../packages/qwen-core/browser-hardening.js';
 
 test('resolves hardening flags with safe input enabled by default', () => {
   const flags = resolveHardeningFlags({});

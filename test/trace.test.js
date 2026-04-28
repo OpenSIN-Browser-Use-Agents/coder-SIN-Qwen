@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { installTraceContext, readTraceContext } from '../trace.js';
-import { writeLogEntry } from '../logger.js';
+import { writeLogEntry } from '../packages/qwen-core/logger.js';
 
 const TRACE_ENV_KEYS = [
   'SIN_CODER_QWEN_RUN_ID',

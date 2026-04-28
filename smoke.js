@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig, runBrowserE2ECheck } from './browser.js';
 import { prepareChromeConnectionForRun } from './cdp-recovery.js';
-import { writeLogEntry } from './logger.js';
+import { writeLogEntry } from './packages/qwen-core/logger.js';
 import { getScopedEnv } from './runtime-config.js';
 import { readTraceContext } from './trace.js';
 
