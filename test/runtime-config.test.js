@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseBooleanEnv, parseIntegerEnv, resolveRuntimeConfig, validateRuntimeConfig } from '../runtime-config.js';
+import { parseBooleanEnv, parseIntegerEnv, resolveRuntimeConfig, validateRuntimeConfig } from '../packages/qwen-core/runtime-config.js';
 
 test('parses runtime config defaults', () => {
   const config = resolveRuntimeConfig({});

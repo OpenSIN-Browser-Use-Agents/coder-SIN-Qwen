@@ -6,8 +6,8 @@ import { runQwenSession } from './browser.js';
 import { hydrateConsultContext, persistConsultMemory } from './consult-memory.js';
 import { parseQwenResponse } from './parser.js';
 import { validateConsultResponse } from './validator.js';
-import { getScopedEnv } from './runtime-config.js';
-import { readTraceContext } from './trace.js';
+import { getScopedEnv } from './packages/qwen-core/runtime-config.js';
+import { readTraceContext } from './packages/qwen-core/trace.js';
 
 const DEFAULT_AUTOTRAINING_FILE = '.coder-sin-qwen-autotraining.jsonl';
 

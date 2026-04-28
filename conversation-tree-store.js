@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { atomicWriteJson } from './lib/memory-writer.js';
 import { addNode, buildBranchPrompt, createTree, deserialize, getBranchPath, setActiveNodeId } from './conversation-tree.js';
-import { getScopedEnv } from './runtime-config.js';
+import { getScopedEnv } from './packages/qwen-core/runtime-config.js';
 
 export const TREE_FILE = resolveConversationTreeFile();
 

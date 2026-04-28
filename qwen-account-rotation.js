@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { parseIntegerEnv } from './runtime-config.js';
+import { parseIntegerEnv } from './packages/qwen-core/runtime-config.js';
 
 const DEFAULT_STATE_PATH = path.join(process.cwd(), 'artifacts', 'qwen-account-state.json');
 const DEFAULT_COOLDOWN_HOURS = 20;

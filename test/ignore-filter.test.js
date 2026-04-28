@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { filterPaths, loadIgnorePatterns } from '../ignore-filter.js';
+import { filterPaths, loadIgnorePatterns } from '../packages/qwen-core/ignore-filter.js';
 
 test('filters ignored files', async () => {
   // The context filter must drop obvious junk and secret-like paths.

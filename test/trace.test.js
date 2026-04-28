@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { installTraceContext, readTraceContext } from '../trace.js';
+import { installTraceContext, readTraceContext } from '../packages/qwen-core/trace.js';
 import { writeLogEntry } from '../packages/qwen-core/logger.js';
 
 const TRACE_ENV_KEYS = [

@@ -9,8 +9,8 @@ import { registerLifecycleResource, unregisterLifecycleResource } from './lifecy
 import { writeLogEntry } from './packages/qwen-core/logger.js';
 import { probeCdpEndpoint } from './lib/cdp-probe.js';
 import { guardPromptLength } from './lib/prompt-guard.js';
-import { getScopedEnv } from './runtime-config.js';
-import { installTraceContext, readTraceContext } from './trace.js';
+import { getScopedEnv } from './packages/qwen-core/runtime-config.js';
+import { installTraceContext, readTraceContext } from './packages/qwen-core/trace.js';
 import { buildPromptPayload } from './packages/qwen-core/prompt-builder.js';
 import { waitForQwenCompletion } from './lib/wait-for-completion.js';
 

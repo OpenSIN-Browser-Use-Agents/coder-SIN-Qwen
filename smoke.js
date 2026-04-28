@@ -5,8 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig, runBrowserE2ECheck } from './browser.js';
 import { prepareChromeConnectionForRun } from './cdp-recovery.js';
 import { writeLogEntry } from './packages/qwen-core/logger.js';
-import { getScopedEnv } from './runtime-config.js';
-import { readTraceContext } from './trace.js';
+import { getScopedEnv } from './packages/qwen-core/runtime-config.js';
+import { readTraceContext } from './packages/qwen-core/trace.js';
 
 export async function runSmokeCheck({ live = getScopedEnv('SMOKE_LIVE', '0') === '1' } = {}) {
   // Start with cheap checks, then optionally escalate to a live browser proof.

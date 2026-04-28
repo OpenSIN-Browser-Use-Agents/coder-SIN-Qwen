@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { detectChromeProfileLock, resolveChromeConnectionConfig } from './browser.js';
 import { buildCandidateCdpUrls } from './cdp-recovery.js';
-import { getScopedEnv, validateRuntimeConfig } from './runtime-config.js';
+import { getScopedEnv, validateRuntimeConfig } from './packages/qwen-core/runtime-config.js';
 
 const execFileAsync = promisify(execFile);
 

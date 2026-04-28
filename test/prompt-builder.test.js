@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPromptPayload } from '../../packages/qwen-core/prompt-builder.js';
+import { buildPromptPayload } from '../packages/qwen-core/prompt-builder.js';
 
 test('builds strict code-oriented simple prompts', () => {
   const prompt = buildPromptPayload({ prompt: 'Say hello', mode: 'simple' });
