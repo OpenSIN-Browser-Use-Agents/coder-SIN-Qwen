@@ -70,6 +70,18 @@ export class AsyncEventLoop {
     this.#running.clear();
   }
 
+  async shutdown(timeoutMs = 2000) {
+    this.clear();
+    const wait = new Promise((resolve) => {
+      const check = () => {
+        if (this.#running.size === 0) resolve();
+        else setTimeout(check, 50);
+      };
+      check();
+    });
+    return Promise.race([wait, new Promise((r) => setTimeout(r, timeoutMs))]);
+  }
+
   getStatus(id) {
     const queueTask = this.#queue.find((t) => t.id === id);
     if (queueTask) return queueTask;
