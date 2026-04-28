@@ -21,3 +21,5 @@ export { loadConversationTreeForCli, buildTreeLines, checkoutNode, buildTreeJson
 export { getRepoRoot, prepareCommit } from './lib/git-prepare.js';
 export { SecretClient, createSecretClient } from './lib/secret-client.js';
 export { SECRET_SCHEMA, getSecretClient, hasQwenCredentials } from './secret-schema.js';
+export { SelectorStrategy, SELECTOR_CHAINS, getChain, getAllChainNames, getChainSelectors } from './lib/selector-chain.js';
+export { SelectorResolver, createSelectorResolver } from './lib/selector-resolver.js';
