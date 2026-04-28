@@ -34,3 +34,4 @@ export { ContextCompressor, createContextCompressor } from './lib/context-compre
 export { StructuredLogger, createStructuredLogger, createLogEntry, formatLogEntry, nextStepId, resetStepCounter } from './lib/structured-log.js';
 export { DomSnapshotManager, createDomSnapshotManager } from './lib/dom-snapshot.js';
 export { AsyncEventLoop, createAsyncEventLoop, TaskStatus, ProgressIndicator, createProgressIndicator } from './lib/async-event-loop.js';
+export { AttachmentValidator, createAttachmentValidator, AttachmentUploader, createAttachmentUploader } from './lib/attachment-hardening.js';
