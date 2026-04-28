@@ -1,0 +1,22 @@
+services:
+  qwen-relay:
+    build: .
+    environment:
+      - CHROME_CDP_URL=http://chrome:9222
+      - CHROME_ATTACH_MODE=1
+      - SIN_CODER_QWEN_DRY_RUN=1
+    depends_on:
+      - chrome
+    volumes:
+      - .:/app
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+
+  chrome:
+    image: chromedp/headless-shell:latest
+    ports:
+      - "9222:9222"
+    shm_size: 2gb
+    cap_add:
+      - SYS_ADMIN
