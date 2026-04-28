@@ -31,3 +31,5 @@ export { EphemeralProfile, createEphemeralProfile, SessionHealthMonitor, createS
 export { TokenBudgetManager, createTokenBudgetManager, CATEGORY_BUDGET } from './lib/token-budget.js';
 export { RelevanceScorer, createRelevanceScorer } from './lib/relevance-scorer.js';
 export { ContextCompressor, createContextCompressor } from './lib/context-compressor.js';
+export { StructuredLogger, createStructuredLogger, createLogEntry, formatLogEntry, nextStepId, resetStepCounter } from './lib/structured-log.js';
+export { DomSnapshotManager, createDomSnapshotManager } from './lib/dom-snapshot.js';
