@@ -1,0 +1,2 @@
+coder-SIN-Qwen — Qwen 3.6 Max FREE
+from your terminal. No API key needed.

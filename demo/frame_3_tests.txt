@@ -1,0 +1,5 @@
+Tests passing:
+  selector-chain: 12/12
+  self-heal: 22/22
+  secret-client: 12/12
+  200+ total

@@ -1,0 +1,60 @@
+^D[3J[H[2J
+  ╔══════════════════════════════════════════════════╗
+  ║     coder-SIN-Qwen — Qwen 3.6 Max FREE          ║
+  ║     from your terminal. No API key needed.       ║
+  ╚══════════════════════════════════════════════════╝
+
+  $ tree -L 2 packages/qwen-core/lib/
+
+packages/qwen-core/lib/
+├── async-event-loop.js
+├── attachment-hardening.js
+├── browser-state-machine.js
+├── cdp-probe.js
+├── context-compressor.js
+├── conversation-tree-cli.js
+├── dom-hash.js
+├── dom-snapshot.js
+├── ephemeral-profile.js
+├── git-prepare.js
+├── memory-writer.js
+├── prompt-guard.js
+├── recovery-playbook.js
+├── relevance-scorer.js
+├── secret-client.js
+├── selector-chain.js
+├── selector-resolver.js
+
+  $ node --test test/selector-chain.test.js
+# skipped 0
+# todo 0
+# duration_ms 80.565542
+
+  $ node --test test/self-heal.test.js
+# skipped 0
+# todo 0
+# duration_ms 85.073292
+
+  $ node --test test/secret-client.test.js
+# skipped 0
+# todo 0
+# duration_ms 78.517833
+
+  ▸ 21 production-hardened modules
+  ▸ 200+ tests (unit + property-based + integration)
+  ▸ Self-Healing browser automation
+  ▸ Zero-trust SecretClient
+  ▸ 9-State Browser State Machine
+
+  ┌──────────────────────────────────────────────────┐
+  │                                                  │
+  │   git clone OpenSIN-Browser-Use-Agents/          │
+  │        coder-SIN-Qwen                            │
+  │   cd coder-SIN-Qwen && pnpm install              │
+  │   node ./index.js "Review my code"               │
+  │                                                  │
+  │   FREE · Open Source · v1.0.0 · MIT License      │
+  │                                                  │
+  └──────────────────────────────────────────────────┘
+
+EXIT_CODE=0

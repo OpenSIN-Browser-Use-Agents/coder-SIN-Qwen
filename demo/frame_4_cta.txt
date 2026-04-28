@@ -1,0 +1,6 @@
+git clone OpenSIN-Browser-Use-Agents/
+       coder-SIN-Qwen
+cd coder-SIN-Qwen && pnpm install
+node ./index.js "Review my code"
+
+FREE · Open Source · v1.0.0
