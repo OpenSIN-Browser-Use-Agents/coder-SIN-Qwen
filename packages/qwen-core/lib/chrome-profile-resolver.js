@@ -98,7 +98,13 @@ export function resolveChromeProfile(options = {}) {
 
   const profiles = getChromeProfiles(userDataDir);
   const match = options.profileName
-    ? findProfileByName(profiles, options.profileName)
+    ? profiles.find((p) => {
+        const name = options.profileName.toLowerCase().trim();
+        return p.exists && (
+          p.name.toLowerCase().includes(name) ||
+          p.email.toLowerCase().includes(name)
+        );
+      })
     : null;
 
   if (match && match.exists) {
