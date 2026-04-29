@@ -13,6 +13,7 @@ import { getScopedEnv } from './packages/qwen-core/runtime-config.js';
 import { installTraceContext, readTraceContext } from './packages/qwen-core/trace.js';
 import { buildPromptPayload } from './packages/qwen-core/prompt-builder.js';
 import { waitForQwenCompletion } from './packages/qwen-core/lib/wait-for-completion.js';
+import { resolveChromeProfile } from './packages/qwen-core/lib/chrome-profile-resolver.js';
 
 export { buildPromptPayload };
 
@@ -414,32 +415,15 @@ export function resolveChromeConnectionConfig() {
 }
 
 export function resolveChromeLaunchConfig() {
-  // Accept either a full profile path (.../Default) or a user-data root plus profile directory.
-  const explicit = process.env.CHROME_PROFILE || process.env.CHROME_PROFILE_DIR || '';
-  const profileDirectory = process.env.CHROME_PROFILE_DIRECTORY || 'Default';
+  const envName = process.env.QWEN_CHROME_PROFILE_NAME || process.env.CHROME_PROFILE_NAME || '';
+  const resolved = resolveChromeProfile({ profileName: envName });
 
-  if (explicit) {
-    const explicitName = path.basename(explicit);
-    if (/^(Default|Profile\s+\d+|Guest Profile|System Profile)$/u.test(explicitName)) {
-      return {
-        userDataDir: path.dirname(explicit),
-        profileDirectory: explicitName,
-        profilePath: explicit
-      };
-    }
-
-    return {
-      userDataDir: explicit,
-      profileDirectory,
-      profilePath: path.join(explicit, profileDirectory)
-    };
-  }
-
-  const userDataDir = defaultChromeUserDataDir();
   return {
-    userDataDir,
-    profileDirectory,
-    profilePath: path.join(userDataDir, profileDirectory)
+    userDataDir: resolved.userDataDir,
+    profileDirectory: resolved.profileDirectory,
+    profilePath: resolved.profilePath,
+    profileName: resolved.profileName || null,
+    profileResolved: resolved.resolved,
   };
 }
 

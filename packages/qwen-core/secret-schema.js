@@ -3,6 +3,8 @@ import { createSecretClient } from './lib/secret-client.js';
 export const SECRET_SCHEMA = {
   CHROME_PROFILE: { required: true, purpose: 'Chrome profile path for authenticated browser sessions' },
   CHROME_PROFILE_DIRECTORY: { required: false, purpose: 'Explicit Chrome profile name when CHROME_PROFILE points at user-data root' },
+  CHROME_PROFILE_NAME: { required: false, purpose: 'Auto-detect Chrome profile by display name (e.g. \"zukunftsorientierte-energie.de\")' },
+  QWEN_CHROME_PROFILE_NAME: { required: false, purpose: 'Alias for CHROME_PROFILE_NAME — auto-detect by name' },
   CHROME_CDP_URL: { required: false, purpose: 'Attach to already-running Chrome debug endpoint' },
   CHROME_REMOTE_DEBUGGING_PORT: { required: false, purpose: 'Shorthand for local CDP endpoint port' },
   QWEN_URL: { required: false, purpose: 'Qwen chat URL override (default: https://chat.qwen.ai)' },
