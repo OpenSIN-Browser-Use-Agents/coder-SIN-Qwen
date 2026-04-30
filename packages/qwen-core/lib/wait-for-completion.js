@@ -1,7 +1,7 @@
 const DEFAULT_STOP_SELECTOR = 'button:has-text("Stop"), button[aria-label*="Stop"], button:has-text("Generierung stoppen")';
 const DEFAULT_THINKING_SELECTOR = '.thinking-block, [data-state="thinking"], .streaming-cursor, .loading-indicator';
 const DEFAULT_SEND_SELECTOR = 'button:has-text("Send"), button[type="submit"], button[aria-label*="Send"]';
-const DEFAULT_ASSISTANT_SELECTOR = ['.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.assistant-message', '.message-content', '.chat-message--assistant'];
+const DEFAULT_ASSISTANT_SELECTOR = ['.chat-container-statement .markdown-prose', '.markdown-prose', '.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.assistant-message', '.message-content', '.chat-message .content', '.chat-message--assistant', '[class*="chat"] [class*="message"]:last-child [class*="content"]'];
 const LANGUAGE_ONLY_LINES = new Set(['bash', 'sh', 'shell', 'zsh', 'javascript', 'js', 'json', 'typescript', 'ts', 'tsx', 'yaml', 'yml', 'python', 'py', 'text']);
 
 export async function waitForQwenCompletion(page, options = {}) {
@@ -89,12 +89,19 @@ async function readLatestAssistantText(page, selector) {
 
   const evaluatedText = await page.evaluate((assistantSelector) => {
     const messages = document.querySelectorAll(assistantSelector);
-    if (!messages.length) return '';
-
-    const last = messages[messages.length - 1];
-    const thinking = last.querySelector('.thinking-content, .reasoning-block, details summary');
-    const stripped = String(last.innerText || '').replace(thinking?.innerText || '', '').trim();
-    return stripped || String(last.innerText || '').trim();
+    if (messages.length) {
+      const last = messages[messages.length - 1];
+      const thinking = last.querySelector('.thinking-content, .reasoning-block, details summary');
+      const stripped = String(last.innerText || '').replace(thinking?.innerText || '', '').trim();
+      return stripped || String(last.innerText || '').trim();
+    }
+    // Fallback: find ANY visible block with substantial text
+    const allBlocks = document.querySelectorAll('[class*="message"] [class*="content"], [class*="chat"] [class*="text"], [class*="response"], [class*="answer"]');
+    for (const block of allBlocks) {
+      const txt = (block.innerText || '').trim();
+      if (txt.length > 20) return txt;
+    }
+    return '';
   }, selectors.join(', ')).catch(() => '');
   return normalizeRenderedReplyText(evaluatedText);
 }
