@@ -22,16 +22,28 @@ export async function waitForQwenCompletion(page, options = {}) {
   const deadline = now() + timeout;
 
   // Wait for stop button to appear (means Qwen started generating)
-  await sleep(300);
+  await sleep(200);
 
   let lastText = previousText;
   let stableCount = 0;
-  const MIN_STABLE_READS = 3;
+  const MIN_STABLE_READS = 5;
 
   while (now() < deadline) {
+    // Stop button visible = Qwen still generating → keep waiting
+    const stopVisible = await page.locator(stopSelector).first().isVisible().catch(() => false);
+
     const currentText = await readLatestAssistantText(page, assistantSelector).catch(() => '');
 
     if (!currentText || currentText === previousText) {
+      stableCount = 0;
+      await sleep(pollMs);
+      continue;
+    }
+
+    if (stopVisible) {
+      // Qwen still writing, reset stability counter
+      lastText = currentText;
+      stableCount = 0;
       await sleep(pollMs);
       continue;
     }
