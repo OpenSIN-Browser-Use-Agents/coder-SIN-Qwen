@@ -3,15 +3,6 @@ import path from 'node:path';
 import os from 'node:os';
 
 const CHROME_USER_DATA = path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome');
-const LOCAL_STATE = path.join(CHROME_USER_DATA, 'Local State');
-
-function readLocalState() {
-  try {
-    return JSON.parse(fs.readFileSync(LOCAL_STATE, 'utf8'));
-  } catch {
-    return null;
-  }
-}
 
 export function getChromeProfiles(userDataDir = CHROME_USER_DATA) {
   const localStatePath = path.join(userDataDir, 'Local State');
@@ -50,42 +41,17 @@ export function findProfileByName(profiles, name) {
   );
 }
 
-export function findProfileWithPrefs(profiles, prefsDir = CHROME_USER_DATA) {
-  return profiles.filter((p) => {
-    const prefsPath = path.join(p.path, 'Preferences');
-    if (!fs.existsSync(prefsPath)) return false;
-    try {
-      const prefs = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
-      return prefs.session?.restore_on_startup !== undefined;
-    } catch {
-      return false;
-    }
-  });
-}
-
 export function resolveChromeProfile(options = {}) {
   const explicitPath = options.chromeProfile || process.env.CHROME_PROFILE || '';
   const explicitDir = options.profileDirectory || process.env.CHROME_PROFILE_DIRECTORY || '';
   const userDataDir = options.userDataDir || CHROME_USER_DATA;
 
+  // 1. Explicit path
   if (explicitPath) {
     const name = path.basename(explicitPath);
-    const isValidProfile = /^(Default|Profile\s+\d+)$/u.test(name);
-    if (isValidProfile) {
-  // Priority 4: Default fallback — on this machine Profile 147 is the logged-in Qwen profile
-  const profiles147 = getChromeProfiles(userDataDir).filter(p => p.directory === 'Profile 147' && p.exists);
-  if (profiles147.length > 0) {
-    const match = profiles147[0];
-    return {
-      userDataDir,
-      profileDirectory: match.directory,
-      profilePath: match.path,
-      profileName: match.name,
-      resolved: true,
-    };
-  }
-
-  return {
+    const isValid = /^(Default|Profile\s+\d+)$/u.test(name);
+    if (isValid) {
+      return {
         userDataDir: path.dirname(explicitPath),
         profileDirectory: name,
         profilePath: explicitPath,
@@ -100,6 +66,7 @@ export function resolveChromeProfile(options = {}) {
     };
   }
 
+  // 2. Explicit directory
   if (explicitDir) {
     return {
       userDataDir,
@@ -109,23 +76,33 @@ export function resolveChromeProfile(options = {}) {
     };
   }
 
+  // 3. Auto-detect by profile name
   const profiles = getChromeProfiles(userDataDir);
-  const match = options.profileName
-    ? profiles.find((p) => {
-        const name = options.profileName.toLowerCase().trim();
-        return p.exists && (
-          p.name.toLowerCase().includes(name) ||
-          p.email.toLowerCase().includes(name)
-        );
-      })
-    : null;
+  const name = (options.profileName || process.env.QWEN_CHROME_PROFILE_NAME || process.env.CHROME_PROFILE_NAME || '').toLowerCase().trim();
+  if (name) {
+    const match = profiles.find((p) => p.exists && (
+      p.name.toLowerCase().includes(name) ||
+      p.email.toLowerCase().includes(name)
+    ));
+    if (match) {
+      return {
+        userDataDir,
+        profileDirectory: match.directory,
+        profilePath: match.path,
+        profileName: match.name,
+        resolved: true,
+      };
+    }
+  }
 
-  if (match && match.exists) {
+  // 4. Machine-specific fallback: Profile 147 (zukunftsorientierte, eingeloggt bei Qwen)
+  const p147 = profiles.find((p) => p.directory === 'Profile 147' && p.exists);
+  if (p147) {
     return {
       userDataDir,
-      profileDirectory: match.directory,
-      profilePath: match.path,
-      profileName: match.name,
+      profileDirectory: p147.directory,
+      profilePath: p147.path,
+      profileName: p147.name,
       resolved: true,
     };
   }
