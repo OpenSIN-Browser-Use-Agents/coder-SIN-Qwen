@@ -60,7 +60,10 @@ export function buildBranchPrompt(prompt, branchPath = []) {
   const cleanPrompt = String(prompt || '').trim();
   if (!Array.isArray(branchPath) || branchPath.length === 0) return cleanPrompt;
 
-  const branchLines = branchPath.flatMap((node) => ([
+  // Only include the last 3 user-assistant pairs to avoid prompt bloat
+  const relevantPath = branchPath.slice(-6);
+
+  const branchLines = relevantPath.flatMap((node) => ([
     `- user(${node.id.slice(0, 8)}): ${String(node.prompt || '').trim()}`,
     `- assistant(${node.id.slice(0, 8)}): ${String(node.response || '').trim()}`
   ]));
