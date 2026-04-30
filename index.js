@@ -18,6 +18,7 @@ import { prepareTemporaryPublicTaskFile } from './public-task-file.js';
 import { appendTurn, buildBranchContextPrompt, buildConversationTreePayload, loadTree, printTree, resolveBranchTarget, resolveConversationTreeFile } from './packages/qwen-core/conversation-tree-store.js';
 import { buildTreeLines, checkoutNode } from './packages/qwen-core/lib/conversation-tree-cli.js';
 import { prepareCommit } from './packages/qwen-core/lib/git-prepare.js';
+import { extractFileBlocks, buildWriteCommands } from './packages/qwen-core/validator.js';
 
 async function main() {
   attachLifecycleHooks();
@@ -29,6 +30,7 @@ async function main() {
   const dryRunFlag = argv.includes('--dry-run');
   const smokeFlag = argv.includes('--smoke');
   const smokeLiveFlag = argv.includes('--smoke-live');
+  const writeFlag = argv.includes('--write');
   const preflightFlag = argv.includes('--preflight');
   const projectRootArgIndex = argv.indexOf('--project-root');
   const projectRoot = projectRootArgIndex >= 0 ? String(argv[projectRootArgIndex + 1] || '').trim() : '';
@@ -271,6 +273,26 @@ async function main() {
   } else {
     const textOutput = review.retry_action === 'strip_fluff' ? review.cleaned_text : reply.trim();
     await writeStdout(`${textOutput}\n`);
+  }
+
+  // --write: extract file blocks and write them to disk
+  if (writeFlag) {
+    const replyText = review.retry_action === 'strip_fluff' ? review.cleaned_text : (reply || '');
+    const blocks = extractFileBlocks(replyText);
+    if (blocks.length > 0) {
+      const cmds = buildWriteCommands(blocks);
+      let written = 0;
+      for (const cmd of cmds) {
+        try {
+          const { execFileSync } = await import('node:child_process');
+          execFileSync('bash', ['-c', cmd.cmd], { stdio: 'pipe' });
+          written += 1;
+        } catch (e) {
+          console.error(`Failed to write ${cmd.path}: ${e.message}`);
+        }
+      }
+      process.stdout.write(`\n[write] ${written}/${blocks.length} files written\n`);
+    }
   }
 
   writeLogEntry({
