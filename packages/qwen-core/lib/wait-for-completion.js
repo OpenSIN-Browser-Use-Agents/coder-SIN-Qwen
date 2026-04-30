@@ -22,48 +22,28 @@ export async function waitForQwenCompletion(page, options = {}) {
   const deadline = now() + timeout;
 
   // Wait for stop button to appear (means Qwen started generating)
-  await sleep(stabilityMs);
+  await sleep(300);
 
   let lastText = previousText;
-  let stableSince = 0;
-  let sawFreshText = false;
+  let stableCount = 0;
+  const MIN_STABLE_READS = 3;
 
   while (now() < deadline) {
-    // Fast path: stop button gone = generation complete
-    const stopVisible = await page.locator(stopSelector).first().isVisible().catch(() => false);
-    if (!stopVisible && sawFreshText) {
-      const currentText = await readLatestAssistantText(page, assistantSelector).catch(() => '');
-      if (currentText && currentText !== lastText) {
-        return currentText;
-      }
-      if (currentText && currentText === lastText && stableSince) {
-        if (now() - stableSince >= stabilityMs) return currentText;
-      }
-    }
-
     const currentText = await readLatestAssistantText(page, assistantSelector).catch(() => '');
 
-    if (!currentText) {
-      await sleep(pollMs);
-      continue;
-    }
-
-    if (!sawFreshText) {
-      sawFreshText = true;
-      lastText = currentText;
-      stableSince = 0;
+    if (!currentText || currentText === previousText) {
       await sleep(pollMs);
       continue;
     }
 
     if (currentText === lastText) {
-      if (!stableSince) stableSince = now();
-      if (now() - stableSince >= stabilityMs) {
+      stableCount += 1;
+      if (stableCount >= MIN_STABLE_READS) {
         return currentText;
       }
     } else {
       lastText = currentText;
-      stableSince = 0;
+      stableCount = 1;
     }
 
     await sleep(pollMs);
