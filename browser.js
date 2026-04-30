@@ -666,6 +666,10 @@ async function hasInteractiveChat(page) {
   const input = await findPromptInput(page);
   if (!input) return false;
   if (await hasBlockingAuthOverlay(page)) return false;
+  // Check if we're on the WELCOME page (not logged in) — the welcome page
+  // has a textarea BUT also has a login button. We need to log in first.
+  const loginVisible = await hasVisibleSelector(page, SELECTORS.authEntry);
+  if (loginVisible) return false;
   return true;
 }
 
