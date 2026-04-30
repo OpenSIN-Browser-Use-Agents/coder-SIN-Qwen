@@ -42,6 +42,7 @@ function buildRepoAwarePrompt(context) {
   const repoVisibility = normalizeVisibility(context.repo?.visibility);
   const urlAccessibility = normalizeUrlAccessibility(context.urlAccessibility || (repoVisibility === 'public' ? 'public' : 'local_only'));
   const renderUrls = urlAccessibility === 'public';
+  const renderRepoUrl = repoVisibility === 'public';
   const publicTaskFile = context.publicTaskFile || null;
   const urlBudget = { count: 0, limit: resolvePromptUrlBudget(context), seen: new Set() };
 
@@ -62,19 +63,19 @@ function buildRepoAwarePrompt(context) {
   let commitUrlLine;
 
   if (publicTaskFileUrlLine) {
-    commitUrlLine = repoVisibility === 'public'
+    commitUrlLine = renderRepoUrl
       ? includeUrlLine(`- commit url: ${context.repo?.urls?.commit || 'N/A'}`, context.repo?.urls?.commit)
       : `- commit ref: ${context.repo?.head || 'N/A'} (local only)`;
 
-    repoUrlLine = repoVisibility === 'public'
+    repoUrlLine = renderRepoUrl
       ? includeUrlLine(`- repo url: ${context.repo?.urls?.web || 'N/A'}`, context.repo?.urls?.web)
       : `- repo url: private_repo_unavailable`;
   } else {
-    repoUrlLine = repoVisibility === 'public'
+    repoUrlLine = renderRepoUrl
       ? includeUrlLine(`- repo url: ${context.repo?.urls?.web || 'N/A'}`, context.repo?.urls?.web)
       : `- repo url: private_repo_unavailable`;
 
-    commitUrlLine = repoVisibility === 'public'
+    commitUrlLine = renderRepoUrl
       ? includeUrlLine(`- commit url: ${context.repo?.urls?.commit || 'N/A'}`, context.repo?.urls?.commit)
       : `- commit ref: ${context.repo?.head || 'N/A'} (local only)`;
   }

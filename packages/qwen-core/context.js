@@ -25,7 +25,7 @@ export async function buildContext({ prompt, projectRoot = process.cwd() }) {
   const repoUrls = buildRepoUrls(gitRemote, gitMeta.head);
   const repoVisibility = await readRepoVisibility(cwd, repoUrls.web);
   const verifiedRepoUrls = await verifyRepoUrls(repoUrls, repoVisibility);
-  const urlAccessibility = verifiedRepoUrls.web && verifiedRepoUrls.commit ? 'public' : 'local_only';
+  const urlAccessibility = repoVisibility === 'public' ? 'public' : (verifiedRepoUrls.web && verifiedRepoUrls.commit ? 'public' : 'local_only');
   const hasLocalOnlyImages = visibleFiles.some(isImageFile);
   const issueReferences = extractIssueReferences(prompt);
   const capabilityManifest = buildCapabilityManifest(prompt);
