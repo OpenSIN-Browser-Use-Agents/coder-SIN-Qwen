@@ -43,9 +43,25 @@ export CHROME_CDP_URL="http://127.0.0.1:9444"
 node ./index.js "Review this codebase"
 ```
 
-Kein Profil angeben. Kein Chrome starten. Einfach attach-en.
+## 🔐 Login-Durchbruch 2026-04-28 ✅
 
-## CDP Sidecar (NUR wenn Chrome noch NICHT läuft)
+Profile 147 → zukunftsorientierte-energie.de. LOGIN FUNKTIONIERT!
+
+**Gefixte Bugs:**
+- `hasInteractiveChat`: URL-basiert statt nur Selector — erkennt Welcome-Seite
+- `maybeEnterAuthPage`: auch bei Login-Modal (kein Seitenwechsel)
+- `chrome-profile-resolver`: filtert nach existierenden Profilen
+
+**Korrekte Nutzung:**
+```bash
+export CHROME_ATTACH_MODE=1
+export CHROME_CDP_URL="http://127.0.0.1:9445"
+export QWEN_ACCOUNT_1_EMAIL="devjerro@gmail.com"
+export QWEN_ACCOUNT_1_PASSWORD="ZOE.jerry2024"
+node ./index.js "Dein Prompt"
+```
+
+Siehe `SESSION_LOGIN_2026-04-28.md` für den vollständigen Debug-Trace.
 
 ```bash
 export CHROME_REMOTE_DEBUGGING_PORT="9444"
