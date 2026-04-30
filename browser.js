@@ -134,6 +134,7 @@ export async function runQwenSession(input, options = {}) {
 
     let currentPrompt = buildSessionPrompt(input);
     let responseText = '';
+    let contextSummary = '';
 
     for (let turn = 1; turn <= maxTurns; turn += 1) {
       await assertQwenSessionBinding(page, sessionId);
@@ -143,6 +144,7 @@ export async function runQwenSession(input, options = {}) {
       
       if (turn === 1 && typeof input === 'object') {
         await maybeUploadContextAttachments(page, input);
+        contextSummary = buildContextSummary(input);
       }
       
       await bindQwenSession(page, sessionId);
@@ -163,7 +165,7 @@ export async function runQwenSession(input, options = {}) {
       if (turn >= maxTurns) break;
       if (!shouldContinueConversation(responseText)) break;
 
-      currentPrompt = buildConversationFollowUpPrompt(originalPrompt, responseText);
+      currentPrompt = buildConversationFollowUpPrompt(originalPrompt, responseText, contextSummary);
     }
 
     return responseText;
@@ -1637,16 +1639,28 @@ export function shouldContinueConversation(text) {
   return false;
 }
 
-export function buildConversationFollowUpPrompt(originalRequest, previousResponse) {
+export function buildContextSummary(input) {
+  if (typeof input !== 'object' || !input) return '';
+  const ctx = input.repo || {};
+  const parts = [];
+  if (ctx.remote) parts.push(`repo: ${ctx.remote}`);
+  if (ctx.branch) parts.push(`branch: ${ctx.branch}`);
+  if (ctx.head) parts.push(`head: ${ctx.head.slice(0, 12)}`);
+  if (ctx.urls?.web) parts.push(`url: ${ctx.urls.web}`);
+  if (input.files?.length > 0) parts.push(`files: ${input.files.length} attached`);
+  return parts.join(', ') || '';
+}
+
+export function buildConversationFollowUpPrompt(originalRequest, previousResponse, contextSummary = '') {
   const trimmed = String(previousResponse || '').trim().slice(0, 2000);
-  return [
+  const parts = [
     `Original request:\n${originalRequest}`,
-    '',
-    'Refine your previous answer using one same-chat follow-up turn.',
-    'Keep only the necessary, best-practice-aligned next step or recommendation.',
-    'Remove optional extras, duplicate explanation, and low-value suggestions.',
-    '',
-    'Previous answer:',
-    trimmed
-  ].join('\n');
+  ];
+  if (contextSummary) parts.push(`\nContext from first turn:\n${contextSummary}`);
+  parts.push('');
+  parts.push('Continue the conversation. Build on your previous answer.');
+  parts.push('');
+  parts.push('Previous answer:');
+  parts.push(trimmed);
+  return parts.join('\n');
 }
