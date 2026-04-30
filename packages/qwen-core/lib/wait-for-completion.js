@@ -1,6 +1,4 @@
 const DEFAULT_STOP_SELECTOR = 'button:has-text("Stop"), button[aria-label*="Stop"], button:has-text("Generierung stoppen")';
-const DEFAULT_THINKING_SELECTOR = '.thinking-block, [data-state="thinking"], .streaming-cursor, .loading-indicator';
-const DEFAULT_SEND_SELECTOR = 'button:has-text("Send"), button[type="submit"], button[aria-label*="Send"]';
 const DEFAULT_ASSISTANT_SELECTOR = ['.chat-container-statement .markdown-prose', '.markdown-prose', '.response-message-content', '.custom-qwen-markdown', '.qwen-markdown', '[data-role="assistant"] .markdown-body', '[data-message-author-role="assistant"]', '.assistant-message', '.message-content', '.chat-message .content', '.chat-message--assistant', '[class*="chat"] [class*="message"]:last-child [class*="content"]'];
 const LANGUAGE_ONLY_LINES = new Set(['bash', 'sh', 'shell', 'zsh', 'javascript', 'js', 'json', 'typescript', 'ts', 'tsx', 'yaml', 'yml', 'python', 'py', 'text']);
 
@@ -10,12 +8,10 @@ export async function waitForQwenCompletion(page, options = {}) {
   }
 
   const timeout = normalizePositiveInteger(options.timeout, 180_000);
-  const stabilityMs = normalizePositiveInteger(options.stabilityMs, 2_500);
-  const pollMs = normalizePositiveInteger(options.pollMs, 400);
+  const stabilityMs = normalizePositiveInteger(options.stabilityMs, 600);
+  const pollMs = normalizePositiveInteger(options.pollMs, 100);
   const previousText = String(options.previousText || '').trim();
   const stopSelector = normalizeSelector(options.stopSelector, DEFAULT_STOP_SELECTOR);
-  const thinkingSelector = normalizeSelector(options.thinkingSelector, DEFAULT_THINKING_SELECTOR);
-  const sendSelector = normalizeSelector(options.sendSelector, DEFAULT_SEND_SELECTOR);
   const assistantSelector = normalizeSelectors(options.assistantSelector, DEFAULT_ASSISTANT_SELECTOR);
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
   const sleep = typeof options.sleep === 'function'
@@ -25,25 +21,29 @@ export async function waitForQwenCompletion(page, options = {}) {
       : (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const deadline = now() + timeout;
 
-  await Promise.allSettled([
-    page.locator(stopSelector).waitFor({ state: 'hidden', timeout }).catch(() => {}),
-    page.locator(thinkingSelector).waitFor({ state: 'hidden', timeout }).catch(() => {}),
-    page.locator(sendSelector).waitFor({ state: 'visible', timeout }).catch(() => {})
-  ]);
+  // Wait for stop button to appear (means Qwen started generating)
+  await sleep(stabilityMs);
 
   let lastText = previousText;
   let stableSince = 0;
   let sawFreshText = false;
 
   while (now() < deadline) {
+    // Fast path: stop button gone = generation complete
+    const stopVisible = await page.locator(stopSelector).first().isVisible().catch(() => false);
+    if (!stopVisible && sawFreshText) {
+      const currentText = await readLatestAssistantText(page, assistantSelector).catch(() => '');
+      if (currentText && currentText !== lastText) {
+        return currentText;
+      }
+      if (currentText && currentText === lastText && stableSince) {
+        if (now() - stableSince >= stabilityMs) return currentText;
+      }
+    }
+
     const currentText = await readLatestAssistantText(page, assistantSelector).catch(() => '');
 
     if (!currentText) {
-      await sleep(pollMs);
-      continue;
-    }
-
-    if (!sawFreshText && currentText === previousText) {
       await sleep(pollMs);
       continue;
     }

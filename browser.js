@@ -1138,7 +1138,7 @@ async function submitPrompt(page, input) {
 }
 
 async function waitForStreamingDone(page, previousAssistantState = { count: 0, text: '' }, expectedPrompt = '', options = {}) {
-  await page.waitForTimeout(800).catch(() => {});
+  await page.waitForTimeout(200).catch(() => {});
   const startedAt = Date.now();
   const completionTimeoutMs = resolveCompletionTimeoutMs(options.completionTimeoutMs);
 
