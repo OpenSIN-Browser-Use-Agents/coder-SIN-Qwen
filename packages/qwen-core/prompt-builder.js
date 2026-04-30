@@ -13,15 +13,9 @@ function buildSimplePrompt(context) {
   return `${prompt}
 
 Rules:
-- Direct answer, production-ready code if applicable.
-- No fluff, no meta-commentary, no disclaimers.
-- For each new or changed file, output a COMPLETE file write block:
-  --- FILE: path/to/file.ext ---
-  \`\`\`language
-  ... complete file content ...
-  \`\`\`
-  --- END FILE ---
-- coder-SIN-Qwen parses these blocks and writes them directly.
+- Direct answer. No fluff, no disclaimers.
+- For each file: --- FILE: path ---\n\`\`\`\n...complete file...\n\`\`\`\n--- END FILE ---
+- coder-SIN-Qwen writes blocks directly to disk.
 - Use complete files, not diffs.
 - Keep it actionable and production-ready.`;
 }
@@ -60,10 +54,7 @@ function buildRepoAwarePrompt(context) {
   if (context.repo?.remote) ctx.push(`repo: ${context.repo.remote}`);
   if (context.repo?.branch) ctx.push(`branch: ${context.repo.branch}`);
   if (context.repo?.head) ctx.push(`head: ${context.repo.head.slice(0, 12)}`);
-  if (renderRepoUrl && context.repo?.urls?.web) {
-    const ru = url(context.repo.urls.web, context.repo.urls.web);
-    if (ru) ctx.push(ru);
-  }
+  if (renderRepoUrl && context.repo?.urls?.web) ctx.push(context.repo.urls.web);
   if (ctx.length) parts.push(`Context: ${ctx.join(', ')}`);
 
   // 3. Files
@@ -78,17 +69,11 @@ function buildRepoAwarePrompt(context) {
 
   // 5. Rules (short, one line each)
   parts.push(`Rules:
-- Direct answer, production-ready code if applicable.
-- No fluff, no meta-commentary, no disclaimers.
-- For each new or changed file, output a COMPLETE file write block:
-  --- FILE: path/to/file.ext ---
-  \`\`\`language
-  ... complete file content ...
-  \`\`\`
-  --- END FILE ---
-- coder-SIN-Qwen parses these blocks and writes them directly.
-- Use complete files, not diffs. Every file block must be self-contained.
-- If asked to review: be critical and specific.`);
+- Direct answer. No fluff, no disclaimers.
+- For EACH file: --- FILE: path ---\n\`\`\`\n...complete file...\n\`\`\`\n--- END FILE ---
+- coder-SIN-Qwen writes these blocks directly to disk.
+- Use complete files, not diffs.
+- Be critical and specific if reviewing.`);
 
   // 6. References
   if (renderUrls && references.length) {
