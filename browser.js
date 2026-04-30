@@ -715,6 +715,9 @@ async function maybeEnterAuthPage(page) {
       await locator.click({ force: true }).catch(() => {});
       await page.waitForTimeout(1500);
       if (/\/auth(?:\?|$)/iu.test(page.url())) return;
+      // Qwen login might be a MODAL (not a page navigation). Check for email input.
+      const emailVisible = await hasVisibleSelector(page, SELECTORS.authEmail);
+      if (emailVisible) return;
     }
   }
 }
