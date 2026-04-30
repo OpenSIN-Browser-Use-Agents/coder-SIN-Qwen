@@ -13,8 +13,16 @@ function buildSimplePrompt(context) {
   return `${prompt}
 
 Rules:
-- Give a direct, concrete answer. No meta-commentary, no disclaimers.
-- If code is needed, use markdown code blocks with file paths.
+- Direct answer, production-ready code if applicable.
+- No fluff, no meta-commentary, no disclaimers.
+- For each new or changed file, output a COMPLETE file write block:
+  --- FILE: path/to/file.ext ---
+  \`\`\`language
+  ... complete file content ...
+  \`\`\`
+  --- END FILE ---
+- coder-SIN-Qwen parses these blocks and writes them directly.
+- Use complete files, not diffs.
 - Keep it actionable and production-ready.`;
 }
 

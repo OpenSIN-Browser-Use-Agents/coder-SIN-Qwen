@@ -82,19 +82,30 @@ export function extractFileBlocks(text) {
   while ((match = FILE_BLOCK_RE.exec(text)) !== null) {
     const filePath = match[1].trim();
     const content = match[2].trim();
-    if (filePath && content) {
+    if (filePath && content && !filePath.includes('..')) {
       blocks.push({ path: filePath, content, start: match.index, end: match.index + match[0].length });
     }
   }
   return blocks;
 }
 
-export function buildWriteCommands(fileBlocks, cwd = '.') {
-  return fileBlocks.map((block) => ({
-    path: block.path,
-    command: `cat > ${block.path} << 'EOF'\n${block.content}\nEOF`,
-    cmd: `mkdir -p "$(dirname "${block.path}")" && cat > "${block.path}" << 'EOF'\n${block.content}\nEOF`,
-  }));
+export function buildWriteCommands(fileBlocks) {
+  return fileBlocks.map((block) => {
+    const dir = block.path.includes('/') ? `mkdir -p "$(dirname "${block.path}")" && ` : '';
+    return {
+      path: block.path,
+      cmd: `${dir}cat > "${block.path}" << 'EOF'\n${block.content}\nEOF`,
+    };
+  });
+}
+
+export function formatFileBlocksSummary(blocks, written) {
+  if (!blocks.length) return '';
+  const lines = blocks.map((b, i) => {
+    const status = i < written ? '✓' : '·';
+    return `  ${status} ${b.path} (${b.content.length} chars)`;
+  });
+  return `\n[write] ${written}/${blocks.length} files\n${lines.join('\n')}\n`;
 }
 
 function detectFluff(text) {
