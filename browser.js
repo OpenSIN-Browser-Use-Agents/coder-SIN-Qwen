@@ -149,7 +149,7 @@ export async function runQwenSession(input, options = {}) {
       
       await bindQwenSession(page, sessionId);
       await enterPrompt(page, inputBox, currentPrompt);
-      await submitPrompt(page, inputBox, currentPrompt, previousAssistantState);
+      await submitPrompt(page, inputBox);
       responseText = await waitForStreamingDone(page, previousAssistantState, currentPrompt, { completionTimeoutMs });
       await waitForPromptReady(page);
 
@@ -482,25 +482,24 @@ function ensureProfileExists(profilePath) {
 }
 
 async function connectToChrome(launchConfig) {
-  // CDP attach mode keeps the user's existing Chrome session alive instead of spawning a second browser.
-  try {
-    ensureChromiumCdpCompatibility();
-    const chromium = await getChromium();
-    const channel = chromium?._channel;
-    const originalConnectOverCDP = channel?.connectOverCDP?.bind(channel);
-    if (typeof originalConnectOverCDP !== 'function') {
-      throw new Error('Playwright Chromium channel does not expose connectOverCDP.');
-    }
-
-    channel.connectOverCDP = (params) => originalConnectOverCDP(buildSafeCdpConnectParams(params));
+  const { chromium } = await import('playwright');
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await chromium.connectOverCDP(launchConfig.cdpUrl, { isLocal: true });
-    } finally {
-      channel.connectOverCDP = originalConnectOverCDP;
+      return await chromium.connectOverCDP(launchConfig.cdpUrl);
+    } catch (e) {
+      lastError = e;
+      if (/Browser\.setDownloadBehavior/i.test(e.message || '')) {
+        try {
+          const info = await fetch(`${String(launchConfig.cdpUrl).replace(/\/+$/, '')}/json/version`).then(r => r.json());
+          if (info.webSocketDebuggerUrl) {
+            return await chromium.connectOverCDP(info.webSocketDebuggerUrl);
+          }
+        } catch {}
+      }
     }
-  } catch (error) {
-    throw new Error(`Failed to attach to Chrome via CDP at ${launchConfig.cdpUrl}. Make sure Chrome is already running with remote debugging enabled. Original error: ${error?.message || String(error)}`);
   }
+  throw new Error(`Failed to attach to Chrome via CDP at ${launchConfig.cdpUrl}. Original error: ${lastError?.message || String(lastError)}`);
 }
 
 export function buildSafeCdpConnectParams(params = {}) {
@@ -1155,42 +1154,22 @@ async function enterPrompt(page, input, prompt) {
   await input.type(safePrompt, { delay: 4 });
 }
 
-async function submitPrompt(page, input, prompt, previousAssistantState = { count: 0, text: '' }) {
+async function submitPrompt(page, input) {
   await page.waitForTimeout(150);
   await input.focus().catch(() => {});
-
   const isTextField = await input.evaluate((node) => {
     const tag = node.tagName.toLowerCase();
     return tag === 'textarea' || tag === 'input';
   }).catch(() => false);
-
   if (isTextField) {
     await input.press('Enter').catch(() => {});
   } else {
     await page.keyboard.press('Enter').catch(() => {});
   }
-
-  if (await waitForSubmissionKickoff(page, input, prompt, previousAssistantState)) return;
-
-  const rateLimitBody = await readPageBodyText(page);
-  if (looksLikeQwenRateLimit(rateLimitBody)) {
-    throw new Error(`Qwen rate-limit page detected immediately after send: ${summarizeRateLimitMessage(rateLimitBody)}`);
-  }
-
-  await page.waitForFunction((selectors) => selectors.some((selector) => Boolean(document.querySelector(selector))), SELECTORS.sendButton, { timeout: 5_000 }).catch(() => {});
-  const sendButtonContainer = page.locator('div.chat-prompt-send-button');
-  const sendButtons = sendButtonContainer.locator('button');
-  if (await sendButtons.count().catch(() => 0)) {
-    await sendButtons.first().click({ force: true }).catch(() => {});
-    if (await waitForSubmissionKickoff(page, input, prompt, previousAssistantState)) return;
-  }
-
-  if (isTextField) {
-    await input.focus().catch(() => {});
-    await input.fill(prompt).catch(() => {});
-    await page.waitForTimeout(200);
-    await input.press('Enter').catch(() => {});
-    await waitForSubmissionKickoff(page, input, prompt, previousAssistantState);
+  await page.waitForTimeout(500);
+  const bodyText = await readPageBodyText(page);
+  if (looksLikeQwenRateLimit(bodyText)) {
+    throw new Error(`Qwen rate-limit page detected immediately after send: ${summarizeRateLimitMessage(bodyText)}`);
   }
 }
 
@@ -1631,12 +1610,8 @@ async function writeArtifactJson(name, payload) {
 export function shouldContinueConversation(text) {
   const normalized = String(text || '').trim();
   if (!normalized) return false;
-
-  if (/^[\s>*-]*$/u.test(normalized)) return false;
-  if (/\b(if you want|i can also|next step|consider|could|should|also|further|let me know|suggest|recommend|however|otherwise)\b/iu.test(normalized)) return true;
-  if (/\?/u.test(normalized)) return true;
-  if (/^\s*[-*•]\s+/m.test(normalized)) return true;
-  return false;
+  if (normalized.length < 10) return false;
+  return true;
 }
 
 export function buildContextSummary(input) {
