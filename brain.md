@@ -1,76 +1,57 @@
 # brain.md — coder-SIN-Qwen Configuration Brain
 
 > **DO NOT DELETE:** This file persists Chrome profile config and runtime knowledge.
+> **NEVER kill the user's Chrome. EVER.**
 
 ## Chrome Profile
 
-coder-SIN-Qwen auto-detects Chrome profiles via `chrome-profile-resolver.js`.
+**KRITISCH: NIEMALS Chrome beenden, zwangsweise neustarten oder Profile wechseln.**
+Der Relay attached an den BEREITS laufenden Chrome via CDP.
 
-**Active profile on this machine:**
+**Aktuell korrektes Profil auf diesem Rechner: `Profile 147`**
+
 ```bash
-export QWEN_CHROME_PROFILE_NAME="zukunftsorientierte"
+# So startet man Chrome mit dem richtigen Profil + CDP (NUR WENN CHROME NOCH NICHT LÄUFT):
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9444 \
+  --user-data-dir="/Users/jeremy/Library/Application Support/Google/Chrome" \
+  --profile-directory="Profile 147" \
+  --no-first-run --no-default-browser-check \
+  "https://chat.qwen.ai"
 ```
 
-**Priority chain for profile resolution:**
-1. `CHROME_PROFILE` — explicit full path
-2. `CHROME_PROFILE_DIRECTORY` — profile dir name (e.g. `Profile 166`)
-3. `QWEN_CHROME_PROFILE_NAME` / `CHROME_PROFILE_NAME` — auto-detect by display name
-4. Falls back to `Default`
+**FALLS Chrome schon läuft (ohne CDP):** NIE killen. User muss Chrome selbst neustarten.
 
-**Current machine profiles (62 total, existing matching "zukunftsorientierte"):**
+**WICHTIG: `--profile-directory="Profile 147"` — NICHT Profile 166!**
+Profile 147 = zukunftsorientierte-energie.de (EINGELOGGT bei Qwen ✅)
+Profile 166 = ebenfalls zukunftsorientierte-energie.de (FALSCHES Profil ❌)
 
-| Directory | Name | Exists |
-|-----------|------|--------|
-| Profile 166 | zukunftsorientierte-energie.de | ✅ |
+**IM ATTACH MODE** wird KEIN Profil vom Relay bestimmt. Er attached einfach an den laufenden Chrome.
 
-**Resolution result:** `Profile 166` is selected when `QWEN_CHROME_PROFILE_NAME=zukunftsorientierte`.
+## BANNED COMMANDS
+- ❌ `pkill -f Chrome` — NIEMALS Chrome killen!
+- ❌ `killall "Google Chrome"` — NIEMALS!
+- ❌ Chrome zwangsweise neustarten
+- ❌ `--profile-directory="Profile 166"` verwenden (nur 147 ist korrekt)
+- ❌ Jegliche Chrome-Prozess-Manipulation
 
-## Qwen Account
-
-Account rotation is managed via `qwen-account-rotation.js` using Infisical-backed credentials.
-
-**Active accounts:** 3 accounts configured via env vars:
-- `QWEN_ACCOUNT_1_EMAIL` / `QWEN_ACCOUNT_1_PASSWORD`
-- `QWEN_ACCOUNT_2_EMAIL` / `QWEN_ACCOUNT_2_PASSWORD`  
-- `QWEN_ACCOUNT_3_EMAIL` / `QWEN_ACCOUNT_3_PASSWORD`
-
-**Cooldown state:** `artifacts/qwen-account-state.json`
-
-## CDP Sidecar
+## Quick Start (mit bereits laufendem Chrome + CDP)
 
 ```bash
-export CHROME_REMOTE_DEBUGGING_PORT="9444"
-pnpm run cdp:start
-export CHROME_CDP_URL="http://127.0.0.1:9444"
-```
-
-## Quick Start (with correct profile)
-
-```bash
-export QWEN_CHROME_PROFILE_NAME="zukunftsorientierte"
-export CHROME_REMOTE_DEBUGGING_PORT="9444"
-pnpm run cdp:start
+export CHROME_ATTACH_MODE=1
 export CHROME_CDP_URL="http://127.0.0.1:9444"
 node ./index.js "Review this codebase"
 ```
 
-## Key Modules
+Kein Profil angeben. Kein Chrome starten. Einfach attach-en.
 
-| Module | Purpose |
-|--------|---------|
-| `packages/qwen-core/lib/chrome-profile-resolver.js` | Reads Chrome Local State, finds correct profile |
-| `browser.js` | Browser session, uses profile resolver |
-| `qwen-account-rotation.js` | Account cooldown + rotation logic |
-| `packages/qwen-core/lib/secret-client.js` | Zero-trust secret access |
-| `cdp-recovery.js` | CDP endpoint recovery |
-| `preflight.js` | Pre-run validation |
+## CDP Sidecar (NUR wenn Chrome noch NICHT läuft)
 
-## v1.0.0 Release
-
-Tagged 2026-04-28. First stable release with 21 modules, 200+ tests.
-
-## Known Issues
-
-- Screen recording requires macOS permission (System Preferences > Privacy)
-- `--dry-run` output can exceed terminal buffer due to conversation tree accumulation
-- ffmpeg avfoundation may fail when terminal has no screen recording permission
+```bash
+export CHROME_REMOTE_DEBUGGING_PORT="9444"
+# Chrome NICHT selbst starten! User startet ihn mit:
+# --profile-directory="Profile 147" --remote-debugging-port=9444
+export CHROME_CDP_URL="http://127.0.0.1:9444"
+export CHROME_ATTACH_MODE=1
+node ./index.js "Review this codebase"
+```

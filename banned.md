@@ -1,17 +1,36 @@
-# Banned Browser Methods
+# banned.md — Verbotene Aktionen
 
-These methods are permanently banned in `coder-SIN-Qwen`:
+## ABSOLUT VERBOTEN — NIEMALS AUSFÜHREN
 
-- direct browser startup on the main profile
-- any `about:blank` or `about:default` startup flow
-- any `open -na` / LaunchServices launch path
-- any browser-start method that opens a second session after one is already prepared
-- any flow that closes the browser before a real assistant response arrives
-- any fallback to Google login
-- any automatic switch away from the working fallback sidecar path
+| Befehl | Grund |
+|--------|-------|
+| `pkill -f Chrome` | NIEMALS Chrome killen — Benutzer hat eingeloggte Sessions |
+| `killall "Google Chrome"` | NIEMALS — siehe oben |
+| `pgrep chrome \| xargs kill` | NIEMALS |
+| `--profile-directory="Profile 166"` | FALSCHES Profil! Nur Profile 147 ist korrekt |
+| `process.exit()` im Relay ohne Cleanup | Hinterlässt Zombie-Prozesse |
+| Chrome automatisch neustarten | Immer manuell vom User |
 
-Allowed only:
+## Regel
 
-- the fallback sidecar browser path on the debug port
-- direct email/password Qwen login
-- keep the browser open until the response is received
+**NIEMALS den Browser des Users beenden, killen, oder zwangsneustarten.**
+Der Benutzer startet Chrome selbst mit dem richtigen Profil und CDP-Port.
+Der Relay attached nur via CDP — mehr nicht.
+
+## Korrektes Vorgehen
+
+```bash
+# Prüfen ob CDP läuft:
+curl -s http://127.0.0.1:9444/json/version
+
+# Wenn ja, einfach attach-en:
+export CHROME_ATTACH_MODE=1
+export CHROME_CDP_URL="http://127.0.0.1:9444"
+node ./index.js "Review this codebase"
+```
+
+## Profile
+
+- **Profile 147** = zukunftsorientierte-energie.de ✅ (RICHTIG, eingeloggt)
+- **Profile 166** = zukunftsorientierte-energie.de ❌ (FALSCH)
+- **Default** = S&F Elektro ❌ (FALSCH)

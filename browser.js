@@ -663,13 +663,23 @@ async function ensureQwenAuthenticated(page, sessionId) {
 }
 
 async function hasInteractiveChat(page) {
+  // Only consider chat interactive if we're on the MAIN chat page,
+  // not on any auth or landing page.
+  const url = page.url();
+  if (/\/auth(?:\?|$)/iu.test(url)) return false;
+  
   const input = await findPromptInput(page);
   if (!input) return false;
   if (await hasBlockingAuthOverlay(page)) return false;
-  // Check if we're on the WELCOME page (not logged in) — the welcome page
-  // has a textarea BUT also has a login button. We need to log in first.
-  const loginVisible = await hasVisibleSelector(page, SELECTORS.authEntry);
-  if (loginVisible) return false;
+  
+  // On the Qwen landing page, a textarea exists but we're not logged in.
+  // Check: if the URL is the root chat page AND an 'Anmelden' button is visible,
+  // we're looking at the welcome page, not a real chat session.
+  if (/chat\.qwen\.ai\/?(\?.*)?$/iu.test(url)) {
+    const loginVisible = await hasVisibleSelector(page, SELECTORS.authEntry);
+    if (loginVisible) return false;
+  }
+  
   return true;
 }
 
