@@ -162,8 +162,10 @@ export async function runQwenSession(input, options = {}) {
       await ensureMaxPreviewSelected(page);
       await ensureThinkingModeSelected(page);
 
-      if (turn >= maxTurns) break;
-      if (!shouldContinueConversation(responseText)) break;
+    if (turn >= maxTurns) break;
+    if (!shouldContinueConversation(responseText)) break;
+    // Only continue if explicitly requested via --turns 2+
+    if (maxTurns <= 1) break;
 
       currentPrompt = buildConversationFollowUpPrompt(originalPrompt, responseText, contextSummary);
     }
@@ -483,23 +485,17 @@ function ensureProfileExists(profilePath) {
 
 async function connectToChrome(launchConfig) {
   const { chromium } = await import('playwright');
-  let lastError;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      return await chromium.connectOverCDP(launchConfig.cdpUrl);
-    } catch (e) {
-      lastError = e;
-      if (/Browser\.setDownloadBehavior/i.test(e.message || '')) {
-        try {
-          const info = await fetch(`${String(launchConfig.cdpUrl).replace(/\/+$/, '')}/json/version`).then(r => r.json());
-          if (info.webSocketDebuggerUrl) {
-            return await chromium.connectOverCDP(info.webSocketDebuggerUrl);
-          }
-        } catch {}
-      }
-    }
+  // Try connectOverCDP first (works on most Chrome versions)
+  try {
+    return await chromium.connectOverCDP(launchConfig.cdpUrl);
+  } catch (e) {
+    if (!/Browser\.setDownloadBehavior/i.test(e.message || '')) throw e;
   }
-  throw new Error(`Failed to attach to Chrome via CDP at ${launchConfig.cdpUrl}. Original error: ${lastError?.message || String(lastError)}`);
+  // Fallback: connect via raw CDP, skip Browser.setDownloadBehavior entirely
+  const cdpUrl = String(launchConfig.cdpUrl).replace(/\/+$/, '');
+  const wsUrl = await fetch(`${cdpUrl}/json/version`).then(r => r.json()).then(d => d.webSocketDebuggerUrl).catch(() => null);
+  if (!wsUrl) throw new Error(`Failed to get WS endpoint from ${cdpUrl}`);
+  return await chromium.connectOverCDP(wsUrl);
 }
 
 export function buildSafeCdpConnectParams(params = {}) {
@@ -1167,6 +1163,8 @@ async function submitPrompt(page, input) {
     await page.keyboard.press('Enter').catch(() => {});
   }
   await page.waitForTimeout(500);
+  // Clear input field so no stale text remains
+  await input.evaluate(node => { if (node) node.value = ''; }).catch(() => {});
   const bodyText = await readPageBodyText(page);
   if (looksLikeQwenRateLimit(bodyText)) {
     throw new Error(`Qwen rate-limit page detected immediately after send: ${summarizeRateLimitMessage(bodyText)}`);
