@@ -72,7 +72,20 @@ export function resolveChromeProfile(options = {}) {
     const name = path.basename(explicitPath);
     const isValidProfile = /^(Default|Profile\s+\d+)$/u.test(name);
     if (isValidProfile) {
-      return {
+  // Priority 4: Default fallback — on this machine Profile 147 is the logged-in Qwen profile
+  const profiles147 = getChromeProfiles(userDataDir).filter(p => p.directory === 'Profile 147' && p.exists);
+  if (profiles147.length > 0) {
+    const match = profiles147[0];
+    return {
+      userDataDir,
+      profileDirectory: match.directory,
+      profilePath: match.path,
+      profileName: match.name,
+      resolved: true,
+    };
+  }
+
+  return {
         userDataDir: path.dirname(explicitPath),
         profileDirectory: name,
         profilePath: explicitPath,
