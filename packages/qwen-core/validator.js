@@ -74,6 +74,29 @@ export function stripFluff(text) {
   return cleaned.replace(/\s+/gu, ' ').trim();
 }
 
+const FILE_BLOCK_RE = /---\s*FILE:\s*(.+?)\s*---\s*\n([\s\S]*?)\n\s*---\s*END\s+FILE\s*---/g;
+
+export function extractFileBlocks(text) {
+  const blocks = [];
+  let match;
+  while ((match = FILE_BLOCK_RE.exec(text)) !== null) {
+    const filePath = match[1].trim();
+    const content = match[2].trim();
+    if (filePath && content) {
+      blocks.push({ path: filePath, content, start: match.index, end: match.index + match[0].length });
+    }
+  }
+  return blocks;
+}
+
+export function buildWriteCommands(fileBlocks, cwd = '.') {
+  return fileBlocks.map((block) => ({
+    path: block.path,
+    command: `cat > ${block.path} << 'EOF'\n${block.content}\nEOF`,
+    cmd: `mkdir -p "$(dirname "${block.path}")" && cat > "${block.path}" << 'EOF'\n${block.content}\nEOF`,
+  }));
+}
+
 function detectFluff(text) {
   const matches = [];
   for (const pattern of FLUFF_PATTERNS) {

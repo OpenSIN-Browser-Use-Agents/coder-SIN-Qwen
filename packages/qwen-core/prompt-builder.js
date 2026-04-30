@@ -72,7 +72,14 @@ function buildRepoAwarePrompt(context) {
   parts.push(`Rules:
 - Direct answer, production-ready code if applicable.
 - No fluff, no meta-commentary, no disclaimers.
-- Markdown code blocks with file paths.
+- For each new or changed file, output a COMPLETE file write block:
+  --- FILE: path/to/file.ext ---
+  \`\`\`language
+  ... complete file content ...
+  \`\`\`
+  --- END FILE ---
+- coder-SIN-Qwen parses these blocks and writes them directly.
+- Use complete files, not diffs. Every file block must be self-contained.
 - If asked to review: be critical and specific.`);
 
   // 6. References

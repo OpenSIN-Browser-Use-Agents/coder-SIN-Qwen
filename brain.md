@@ -63,6 +63,24 @@ node ./index.js "Dein Prompt"
 
 Siehe `SESSION_LOGIN_2026-04-28.md` für den vollständigen Debug-Trace.
 
+## 📁 File-Write-Block Format (#39)
+
+**Qwen wird instruiert, jede Datei als kompletten Write-Block auszugeben:**
+
+```
+--- FILE: path/to/file.ext ---
+```language
+... vollständiger datei-inhalt ...
+```
+--- END FILE ---
+```
+
+**Parser:**
+- `validator.js` → `extractFileBlocks(text)` → gibt Array von `{path, content}` zurück
+- `buildWriteCommands(blocks)` → generiert `cat > file << 'EOF' ... EOF` Befehle
+
+**Ziel:** coder-SIN-Qwen kann die Blöcke direkt parsen und in Dateien schreiben — kein Copy-Paste mehr nötig.
+
 ```bash
 export CHROME_REMOTE_DEBUGGING_PORT="9444"
 # Chrome NICHT selbst starten! User startet ihn mit:
