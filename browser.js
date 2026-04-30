@@ -135,8 +135,11 @@ export async function runQwenSession(input, options = {}) {
     let currentPrompt = buildSessionPrompt(input);
     let responseText = '';
     let contextSummary = '';
+    let turnCount = 0;
 
     for (let turn = 1; turn <= maxTurns; turn += 1) {
+      turnCount = turn;
+      writeLogEntry({ event: 'turn_start', turn, maxTurns, promptLength: currentPrompt.length }).catch(() => {});
       await assertQwenSessionBinding(page, sessionId);
       const previousAssistantState = await getLastAssistantState(page);
       await ensureMaxPreviewSelected(page);
@@ -162,10 +165,9 @@ export async function runQwenSession(input, options = {}) {
       await ensureMaxPreviewSelected(page);
       await ensureThinkingModeSelected(page);
 
-    if (turn >= maxTurns) break;
-    if (!shouldContinueConversation(responseText)) break;
-    // Only continue if explicitly requested via --turns 2+
-    if (maxTurns <= 1) break;
+      if (turn >= maxTurns) break;
+      if (!shouldContinueConversation(responseText)) break;
+      if (maxTurns <= 1) break;
 
       currentPrompt = buildConversationFollowUpPrompt(originalPrompt, responseText, contextSummary);
     }
@@ -1120,54 +1122,18 @@ async function verifyReactInputRegistration(input, expectedText) {
 async function enterPrompt(page, input, prompt) {
   const browserSafePrompt = sanitizePromptForBrowser(prompt);
   const guardedPrompt = guardPromptLength(browserSafePrompt, { env: process.env });
-  if (guardedPrompt.truncated) {
-    await writeLogEntry({
-      event: 'prompt_truncated',
-      originalLength: guardedPrompt.originalLength,
-      truncatedLength: guardedPrompt.truncatedLength,
-      threshold: guardedPrompt.threshold
-    }).catch(() => {});
-  }
-
   const safePrompt = guardedPrompt.prompt;
-  if (await safeInjectInput(page, input, safePrompt, { env: process.env })) {
-    const reactRegistered = await verifyReactInputRegistration(input, safePrompt);
-    if (reactRegistered) return;
-  }
-
-  const isTextField = await input.evaluate((node) => {
-    const tag = node.tagName.toLowerCase();
-    const className = String(node.className || '');
-    return (tag === 'textarea' || tag === 'input') && !className.includes('ime-text-area') && !node.readOnly && !node.hasAttribute('readonly');
-  });
-
-  if (isTextField) {
-    await input.fill(safePrompt);
-    return;
-  }
-
-  await input.click();
-  await input.type(safePrompt, { delay: 4 });
+  await input.fill(safePrompt);
 }
 
 async function submitPrompt(page, input) {
-  await page.waitForTimeout(150);
   await input.focus().catch(() => {});
-  const isTextField = await input.evaluate((node) => {
-    const tag = node.tagName.toLowerCase();
-    return tag === 'textarea' || tag === 'input';
-  }).catch(() => false);
-  if (isTextField) {
-    await input.press('Enter').catch(() => {});
-  } else {
-    await page.keyboard.press('Enter').catch(() => {});
-  }
-  await page.waitForTimeout(500);
-  // Clear input field so no stale text remains
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(1000);
   await input.evaluate(node => { if (node) node.value = ''; }).catch(() => {});
   const bodyText = await readPageBodyText(page);
   if (looksLikeQwenRateLimit(bodyText)) {
-    throw new Error(`Qwen rate-limit page detected immediately after send: ${summarizeRateLimitMessage(bodyText)}`);
+    throw new Error(`Qwen rate-limit page detected: ${summarizeRateLimitMessage(bodyText)}`);
   }
 }
 
