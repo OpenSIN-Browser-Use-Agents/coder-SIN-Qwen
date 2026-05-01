@@ -2,14 +2,14 @@
 
 ## ABSOLUT VERBOTEN — NIEMALS AUSFÜHREN
 
-| Befehl | Grund |
-|--------|-------|
-| `pkill -f Chrome` | NIEMALS Chrome killen — Benutzer hat eingeloggte Sessions |
-| `killall "Google Chrome"` | NIEMALS — siehe oben |
-| `pgrep chrome \| xargs kill` | NIEMALS |
-| `--profile-directory="Profile 166"` | FALSCHES Profil! Nur Profile 147 ist korrekt |
-| `process.exit()` im Relay ohne Cleanup | Hinterlässt Zombie-Prozesse |
-| Chrome automatisch neustarten | Immer manuell vom User |
+| Befehl                                                                       | Grund                                        |
+| ---------------------------------------------------------------------------- | -------------------------------------------- |
+| `NIEMALS – BANNED (semgrep Regel) killen — Benutzer hat eingeloggte Sessions |
+| `killall "Google Chrome"`                                                    | NIEMALS — siehe oben                         |
+| `playstealth launch (isolierte PID) \| xargs kill`                           | NIEMALS                                      |
+| `--profile-directory="Profile 166"`                                          | FALSCHES Profil! Nur Profile 147 ist korrekt |
+| `process.exit()` im Relay ohne Cleanup                                       | Hinterlässt Zombie-Prozesse                  |
+| Chrome automatisch neustarten                                                | Immer manuell vom User                       |
 
 ## Regel
 

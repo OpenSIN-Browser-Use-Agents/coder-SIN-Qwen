@@ -3,9 +3,11 @@
 **2026-04-28 22:xx Uhr — ERFOLGREICHER QWEN-LOGIN IN PRODUKTION**
 
 ## Was war das Problem?
+
 Der Relay hat nie den "Anmelden"-Button gedrückt, weil `hasInteractiveChat` immer TRUE zurückgab — die Qwen Welcome-Seite hat ein Textarea, aber der Anmelden-Button ist auch sichtbar.
 
 ## Was wurde gefixt?
+
 1. **`hasInteractiveChat`** (browser.js): Prüft jetzt URL-basiert:
    - `/auth` in URL → false (muss login)
    - Root URL `chat.qwen.ai/` + Anmelden-Button sichtbar → false (Welcome-Seite)
@@ -20,12 +22,14 @@ Der Relay hat nie den "Anmelden"-Button gedrückt, weil `hasInteractiveChat` imm
    - Profile 147 = zukunftsorientierte-energie.de ✅ (EINGELOGGT)
 
 ## Was wurde gelernt
+
 - NIEMALS Chrome killen/neustarten
 - Immer `CHROME_ATTACH_MODE=1` + `CHROME_CDP_URL` für attach
 - Profile 147, nicht 166
 - NIEMALS `pkill`, `killall`, `pgrep xargs kill` ausführen
 
 ## Korrekter Start (fürs brain.md)
+
 ```bash
 # Chrome läuft bereits mit Profile 147 + --remote-debugging-port=9445
 export CHROME_ATTACH_MODE=1

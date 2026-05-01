@@ -3,6 +3,7 @@
 ## SecretClient (Zero-Trust)
 
 All secret access now goes through `SecretClient` (`packages/qwen-core/lib/secret-client.js`), which:
+
 - Reads from `process.env` first, falls back to `.env.local`
 - **Never logs secret values** — only availability status
 - Provides typed `get()` / `getOptional()` / `has()` access

@@ -41,6 +41,7 @@ node ./verify.js
 ## Reporting Bugs
 
 Please use [GitHub Issues](https://github.com/OpenSIN-Browser-Use-Agents/coder-SIN-Qwen/issues) with:
+
 - Clear description
 - Steps to reproduce
 - Expected vs actual behavior

@@ -29,7 +29,8 @@ Profile 166 = ebenfalls zukunftsorientierte-energie.de (FALSCHES Profil ❌)
 **IM ATTACH MODE** wird KEIN Profil vom Relay bestimmt. Er attached einfach an den laufenden Chrome.
 
 ## BANNED COMMANDS
-- ❌ `pkill -f Chrome` — NIEMALS Chrome killen!
+
+- ❌ `NIEMALS – BANNED (semgrep Regel) killen!
 - ❌ `killall "Google Chrome"` — NIEMALS!
 - ❌ Chrome zwangsweise neustarten
 - ❌ `--profile-directory="Profile 166"` verwenden (nur 147 ist korrekt)
@@ -48,11 +49,13 @@ node ./index.js "Review this codebase"
 Profile 147 → zukunftsorientierte-energie.de. LOGIN FUNKTIONIERT!
 
 **Gefixte Bugs:**
+
 - `hasInteractiveChat`: URL-basiert statt nur Selector — erkennt Welcome-Seite
 - `maybeEnterAuthPage`: auch bei Login-Modal (kein Seitenwechsel)
 - `chrome-profile-resolver`: filtert nach existierenden Profilen
 
 **Korrekte Nutzung:**
+
 ```bash
 export CHROME_ATTACH_MODE=1
 export CHROME_CDP_URL="http://127.0.0.1:9445"
@@ -67,13 +70,15 @@ Siehe `SESSION_LOGIN_2026-04-28.md` für den vollständigen Debug-Trace.
 
 **Qwen wird instruiert, jede Datei als kompletten Write-Block auszugeben:**
 
-```
+````
 --- FILE: path/to/file.ext ---
 ```language
 ... vollständiger datei-inhalt ...
-```
+````
+
 --- END FILE ---
-```
+
+````
 
 **Parser:**
 - `validator.js` → `extractFileBlocks(text)` → gibt Array von `{path, content}` zurück
@@ -88,4 +93,4 @@ export CHROME_REMOTE_DEBUGGING_PORT="9444"
 export CHROME_CDP_URL="http://127.0.0.1:9444"
 export CHROME_ATTACH_MODE=1
 node ./index.js "Review this codebase"
-```
+````

@@ -128,34 +128,34 @@ flowchart TB
 
 ## Features
 
-| Capability | Description | Status |
-|:---|:---|:---:|
-| **Qwen Relay** | Send code context to Qwen via browser UI automation | ✅ |
-| **Zero API Keys** | No API key needed — uses real Qwen web UI | ✅ |
-| **Conversation Tree** | Persistent branching, `--branch`/`--tree`/`--checkout` | ✅ |
-| **Account Rotation** | 3+ Qwen accounts with cooldown + circuit breaker | ✅ |
-| **Self-Healing** | DOM drift detection, recovery playbooks, 6 error scenarios | ✅ |
-| **State Machine** | 9-state browser lifecycle with event-driven sync | ✅ |
-| **SecretClient** | Zero-trust secret management, never logs values | ✅ |
-| **Context Compression** | Token budget manager + relevance scoring (TF-IDF) | ✅ |
-| **Observability 2.0** | Structured logging with step IDs, DOM snapshots | ✅ |
-| **Async CLI** | Task queue with timeout, progress spinner | ✅ |
-| **Attachment Hardening** | Size validation, MIME checks, upload retry | ✅ |
-| **Test Pyramid** | 200+ tests, property-based + integration + unit | ✅ |
-| **TypeScript Ready** | `tsconfig.json` with strict mode, 0 type errors | ✅ |
-| **ADRs** | 5 architecture decision records in `docs/adr/` | ✅ |
+| Capability               | Description                                                | Status |
+| :----------------------- | :--------------------------------------------------------- | :----: |
+| **Qwen Relay**           | Send code context to Qwen via browser UI automation        |   ✅   |
+| **Zero API Keys**        | No API key needed — uses real Qwen web UI                  |   ✅   |
+| **Conversation Tree**    | Persistent branching, `--branch`/`--tree`/`--checkout`     |   ✅   |
+| **Account Rotation**     | 3+ Qwen accounts with cooldown + circuit breaker           |   ✅   |
+| **Self-Healing**         | DOM drift detection, recovery playbooks, 6 error scenarios |   ✅   |
+| **State Machine**        | 9-state browser lifecycle with event-driven sync           |   ✅   |
+| **SecretClient**         | Zero-trust secret management, never logs values            |   ✅   |
+| **Context Compression**  | Token budget manager + relevance scoring (TF-IDF)          |   ✅   |
+| **Observability 2.0**    | Structured logging with step IDs, DOM snapshots            |   ✅   |
+| **Async CLI**            | Task queue with timeout, progress spinner                  |   ✅   |
+| **Attachment Hardening** | Size validation, MIME checks, upload retry                 |   ✅   |
+| **Test Pyramid**         | 200+ tests, property-based + integration + unit            |   ✅   |
+| **TypeScript Ready**     | `tsconfig.json` with strict mode, 0 type errors            |   ✅   |
+| **ADRs**                 | 5 architecture decision records in `docs/adr/`             |   ✅   |
 
 ---
 
 ## Use Cases
 
-| Who | Problem | Solution |
-|:---|:---|:---|
-| **Developer** | Need code review but no API budget | Relay context to Qwen's free UI |
-| **OpenCode Agent** | Needs Qwen consultation mid-task | `/ask-qwen` command → structured reply |
-| **DevOps** | Automate code analysis in CI | `--json` mode for machine-readable output |
-| **Researcher** | Compare model outputs iteratively | Conversation tree with branching |
-| **Team Lead** | Audit code quality at scale | Autotraining snapshots + trace correlation |
+| Who                | Problem                            | Solution                                   |
+| :----------------- | :--------------------------------- | :----------------------------------------- |
+| **Developer**      | Need code review but no API budget | Relay context to Qwen's free UI            |
+| **OpenCode Agent** | Needs Qwen consultation mid-task   | `/ask-qwen` command → structured reply     |
+| **DevOps**         | Automate code analysis in CI       | `--json` mode for machine-readable output  |
+| **Researcher**     | Compare model outputs iteratively  | Conversation tree with branching           |
+| **Team Lead**      | Audit code quality at scale        | Autotraining snapshots + trace correlation |
 
 ---
 
@@ -177,6 +177,7 @@ node ./index.js --turns 2 "Design the next feature"
 # Dry-run (no browser)
 node ./index.js --dry-run "What context would you send?"
 ```
+
 </details>
 
 <details>
@@ -197,6 +198,7 @@ node ./index.js --checkout none
 # Prepare commit (dry-run)
 node ./index.js --prepare-commit --dry-run
 ```
+
 </details>
 
 <details>
@@ -216,6 +218,7 @@ pnpm run smoke:live
 # Coverage report
 pnpm run coverage
 ```
+
 </details>
 
 <details>
@@ -235,6 +238,7 @@ pnpm run secrets:push
 pnpm run cdp:start
 pnpm run cdp:status
 ```
+
 </details>
 
 <details>
@@ -252,6 +256,7 @@ pnpm run release:major
 # Verify after changes
 node ./verify.js
 ```
+
 </details>
 
 ---
@@ -311,36 +316,36 @@ coder-SIN-Qwen/
 <details>
 <summary>📋 Environment Variables</summary>
 
-| Variable | Default | Description |
-|:---|:---|:---|
-| `QWEN_URL` | `https://chat.qwen.ai` | Qwen chat URL |
-| `QWEN_AUTH_METHOD` | `email_password` | Auth mode (locked) |
-| `CHROME_CDP_URL` | — | CDP endpoint for attach mode |
-| `CHROME_REMOTE_DEBUGGING_PORT` | `9444` | Sidecar CDP port |
-| `CHROME_PROFILE` | — | Chrome profile path |
-| `QWEN_ACCOUNT_ORDER` | — | Account rotation order |
-| `QWEN_ACCOUNT_1_EMAIL` | — | Account 1 email |
-| `QWEN_ACCOUNT_1_PASSWORD` | — | Account 1 password |
-| `SIN_CODER_QWEN_DRY_RUN` | `0` | Skip browser automation |
-| `SIN_CODER_QWEN_LOG_FILE` | — | JSONL log path |
-| `SIN_CODER_QWEN_ARTIFACT_DIR` | `artifacts/` | Screenshot output |
-| `SIN_CODER_QWEN_MAX_PROMPT_LENGTH` | `12000` | Max prompt chars |
-| `SIN_CODER_QWEN_SESSION_TIMEOUT_MS` | — | Browser timeout |
-| `INFISICAL_PROJECT_ID` | — | Infisical project ID |
-| `GH_TOKEN` | — | GitHub token |
+| Variable                            | Default                | Description                  |
+| :---------------------------------- | :--------------------- | :--------------------------- |
+| `QWEN_URL`                          | `https://chat.qwen.ai` | Qwen chat URL                |
+| `QWEN_AUTH_METHOD`                  | `email_password`       | Auth mode (locked)           |
+| `CHROME_CDP_URL`                    | —                      | CDP endpoint for attach mode |
+| `CHROME_REMOTE_DEBUGGING_PORT`      | `9444`                 | Sidecar CDP port             |
+| `CHROME_PROFILE`                    | —                      | Chrome profile path          |
+| `QWEN_ACCOUNT_ORDER`                | —                      | Account rotation order       |
+| `QWEN_ACCOUNT_1_EMAIL`              | —                      | Account 1 email              |
+| `QWEN_ACCOUNT_1_PASSWORD`           | —                      | Account 1 password           |
+| `SIN_CODER_QWEN_DRY_RUN`            | `0`                    | Skip browser automation      |
+| `SIN_CODER_QWEN_LOG_FILE`           | —                      | JSONL log path               |
+| `SIN_CODER_QWEN_ARTIFACT_DIR`       | `artifacts/`           | Screenshot output            |
+| `SIN_CODER_QWEN_MAX_PROMPT_LENGTH`  | `12000`                | Max prompt chars             |
+| `SIN_CODER_QWEN_SESSION_TIMEOUT_MS` | —                      | Browser timeout              |
+| `INFISICAL_PROJECT_ID`              | —                      | Infisical project ID         |
+| `GH_TOKEN`                          | —                      | GitHub token                 |
 
 </details>
 
 <details>
 <summary>📁 Key Files</summary>
 
-| File | Purpose |
-|:---|:---|
-| `.qwenignore` | Token-saving context filter |
-| `.coder-sin-qwen-memory.json` | Consult memory store |
-| `.coder-sin-qwen-conversations.json` | Conversation tree store |
-| `secrets.required.json` | Secret validation spec |
-| `coder-sin-qwen-tasks/` | Task packet workspace |
+| File                                 | Purpose                     |
+| :----------------------------------- | :-------------------------- |
+| `.qwenignore`                        | Token-saving context filter |
+| `.coder-sin-qwen-memory.json`        | Consult memory store        |
+| `.coder-sin-qwen-conversations.json` | Conversation tree store     |
+| `secrets.required.json`              | Secret validation spec      |
+| `coder-sin-qwen-tasks/`              | Task packet workspace       |
 
 </details>
 

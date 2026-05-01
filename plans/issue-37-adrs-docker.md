@@ -5,15 +5,19 @@
 **Geschätzter Aufwand:** 2-3 Tage
 
 ## Objective
+
 Dem Projekt fehlen Architekturentscheidungen (ADRs) und eine schnelle Dev-Umgebung. Wir brauchen **ADR-Dokumentation aller großen Entscheidungen** und ein **Docker-One-Click-Setup** für neue Entwickler.
 
 ## Ursprüngliche Issues
+
 - **#25**: Issue-Body fordert ADRs, OpenAPI Spec, Docker-Compose
 
 ## Implementierung
 
 ### Phase 1: ADR-Verzeichnis
+
 Erstelle `docs/adr/` mit:
+
 - ADR-0001: Entscheidung für UI-Automation statt API
 - ADR-0002: Sidecar CDP Attach als einziger Browser-Pfad
 - ADR-0003: pnpm + Turbo als Monorepo-Tooling
@@ -23,6 +27,7 @@ Erstelle `docs/adr/` mit:
 - ADR-XXXX: Pro größere Entscheidung
 
 ### Phase 2: Docker Dev Environment
+
 ```dockerfile
 # Dockerfile
 FROM node:20-slim
@@ -35,6 +40,7 @@ CMD ["node", "./index.js"]
 ```
 
 `docker-compose.yml`:
+
 ```yaml
 services:
   qwen-relay:
@@ -50,12 +56,14 @@ services:
 ```
 
 ### Phase 3: CONTRIBUTING.md
+
 - One-Click Dev Setup Guide
 - Branching-Strategie (Feature-Branches + PRs)
 - Test-Guide (welche Tests wann laufen)
 - CI/CD-Übersicht
 
 ## Akzeptanzkriterien
+
 - [ ] 5+ ADRs im `docs/adr/` Verzeichnis
 - [ ] Dockerfile + docker-compose.yml
 - [ ] CONTRIBUTING.md mit Setup-Guide

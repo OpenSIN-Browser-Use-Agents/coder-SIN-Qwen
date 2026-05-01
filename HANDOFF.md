@@ -97,6 +97,7 @@
 - Practical takeaway: never use `open -na` / blank-tab startup. Always use the prepared sidecar CDP attach path.
 
 Sources:
+
 - Apple Launch Services docs: https://developer.apple.com/library/archive/documentation/Carbon/Conceptual/LaunchServicesConcepts/LSCTasks/LSCTasks.html
 - macOS `open(1)` behavior summary: https://www.unix.com/man-page/osx/1/open?os=osx&section=1&query=open
 - Chromium startup prefs: https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/browser/prefs/session_startup_pref.cc

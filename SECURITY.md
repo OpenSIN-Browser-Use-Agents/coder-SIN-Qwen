@@ -25,5 +25,5 @@ We will respond within 48 hours and work with you to resolve the issue.
 ## Supported Versions
 
 | Version | Supported |
-|:---|:---|
-| 0.x.x | ✅ |
+| :------ | :-------- |
+| 0.x.x   | ✅        |

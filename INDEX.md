@@ -6,17 +6,17 @@
 
 ## Quick Links
 
-| Resource | Path |
-|:---|:---|
-| README | [README.md](README.md) |
+| Resource     | Path                                         |
+| :----------- | :------------------------------------------- |
+| README       | [README.md](README.md)                       |
 | Architecture | [docs/architecture.md](docs/architecture.md) |
-| ADRs | [docs/adr/](docs/adr/) |
-| Installation | [INSTALL.md](INSTALL.md) |
-| Operations | [OPS.md](OPS.md) |
-| Security | [SECURITY.md](SECURITY.md) |
-| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Agent Rules | [AGENTS.md](AGENTS.md) |
-| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+| ADRs         | [docs/adr/](docs/adr/)                       |
+| Installation | [INSTALL.md](INSTALL.md)                     |
+| Operations   | [OPS.md](OPS.md)                             |
+| Security     | [SECURITY.md](SECURITY.md)                   |
+| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md)           |
+| Agent Rules  | [AGENTS.md](AGENTS.md)                       |
+| Changelog    | [CHANGELOG.md](CHANGELOG.md)                 |
 
 ## Project Structure
 
@@ -87,17 +87,17 @@ coder-SIN-Qwen/
 
 ## Key Scripts
 
-| Command | Purpose |
-|:---|:---|
-| `pnpm run ask` | Run the CLI (basic prompt) |
-| `pnpm run ask:json` | CLI with JSON output |
-| `pnpm test` | Run all tests |
-| `pnpm run typecheck` | TypeScript check |
-| `pnpm run coverage` | Coverage report |
-| `pnpm run verify` | Full verification |
-| `pnpm run preflight` | Env & dep checks |
-| `pnpm run smoke` | Readiness check |
-| `pnpm run secrets:check` | Validate secrets |
+| Command                  | Purpose                    |
+| :----------------------- | :------------------------- |
+| `pnpm run ask`           | Run the CLI (basic prompt) |
+| `pnpm run ask:json`      | CLI with JSON output       |
+| `pnpm test`              | Run all tests              |
+| `pnpm run typecheck`     | TypeScript check           |
+| `pnpm run coverage`      | Coverage report            |
+| `pnpm run verify`        | Full verification          |
+| `pnpm run preflight`     | Env & dep checks           |
+| `pnpm run smoke`         | Readiness check            |
+| `pnpm run secrets:check` | Validate secrets           |
 
 ## OpenCode
 
